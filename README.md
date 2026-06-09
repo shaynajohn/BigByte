@@ -1,12 +1,12 @@
 # BigByte
 
-BigByte is a San Francisco Bay Area group restaurant recommender.
+BigByte is a San Francisco group food recommender.
 
 This version is intentionally independent from the original class-project Supabase setup. It uses:
 
 - React + Vite frontend
 - FastAPI backend
-- A curated Bay Area demo restaurant catalog
+- A curated San Francisco demo food catalog
 - In-memory group/session state only
 
 Nothing is permanently saved. If the backend restarts, temporary groups and answers are cleared.
@@ -43,11 +43,11 @@ http://localhost:5173
 - No Supabase required.
 - No SQLite database required.
 - Group data is held in backend memory.
-- Browser refresh may clear frontend-only state until the live group API is fully wired through the UI.
+- Group membership and submitted answers are held in backend memory while the server is running.
 
 ## Main Files
 
 - `backend/main.py`: FastAPI API and temporary group endpoints
-- `backend/demo_catalog.py`: Bay Area restaurant catalog
+- `backend/demo_catalog.py`: San Francisco food catalog
 - `backend/recommender_rules.py`: ranking/scoring logic
 - `frontend/src/`: React app UI

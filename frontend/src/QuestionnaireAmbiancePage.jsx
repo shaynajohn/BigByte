@@ -15,8 +15,8 @@ const AMBIANCE_OPTIONS = [
 /**
  * Ambiance multi-select (Figma 35:411): pills + dealbreaker slider, ¼–½–¼ rails.
  */
-export function QuestionnaireAmbiancePage({ groupId, groupExists, onBack, onComplete }) {
-  const initial = useMemo(() => loadAmbianceDraft(groupId), [groupId])
+export function QuestionnaireAmbiancePage({ groupId, groupExists, actorId, onBack, onComplete }) {
+  const initial = useMemo(() => loadAmbianceDraft(groupId, actorId), [groupId, actorId])
   const [selected, setSelected] = useState(() => new Set(initial?.ambiance_types_selected ?? []))
   const [dealbreaker, setDealbreaker] = useState(initial?.ambiance_dealbreaker_level ?? 3)
   const [localError, setLocalError] = useState('')
@@ -43,7 +43,7 @@ export function QuestionnaireAmbiancePage({ groupId, groupExists, onBack, onComp
       return ia - ib
     })
     const ambiance_dealbreaker_level = dealbreaker
-    saveAmbianceDraft(groupId, { ambiance_types_selected, ambiance_dealbreaker_level })
+    saveAmbianceDraft(groupId, { ambiance_types_selected, ambiance_dealbreaker_level }, actorId)
     onComplete?.({ ambiance_types_selected, ambiance_dealbreaker_level })
   }
 
@@ -69,7 +69,7 @@ export function QuestionnaireAmbiancePage({ groupId, groupExists, onBack, onComp
         {asideLeft}
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back

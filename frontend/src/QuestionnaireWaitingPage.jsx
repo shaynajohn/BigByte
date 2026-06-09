@@ -15,69 +15,66 @@ const WAITING_ORBIT_SLOTS = [
 
 /**
  * Figma 43:518 — copy in `.q-wait-page__copy` matches the frame text only; chrome lives outside.
- * Prefetches group recommendations; "Next" appears once the API returns so users advance explicitly.
+ * Polls group completion; "Next" appears once every backend member has submitted answers.
  */
 export function QuestionnaireWaitingPage({
   groupId,
   groupExists,
+  actorId,
   memberActorIds,
-  latitude,
-  longitude,
   onBackToGroup,
   onContinueToResults,
 }) {
   const [phase, setPhase] = useState('loading')
+  const [progress, setProgress] = useState({
+    completed: 0,
+    total: (memberActorIds || []).filter(Boolean).length,
+  })
 
   useEffect(() => {
-    markQuestionnaireFlowComplete(groupId)
-  }, [groupId])
+    markQuestionnaireFlowComplete(groupId, actorId)
+  }, [groupId, actorId])
 
   useEffect(() => {
     if (!groupExists) return undefined
 
-    const ids = (memberActorIds || []).filter(Boolean)
-    if (!ids.length) {
-      setPhase('ready')
-      return undefined
-    }
-
     let cancelled = false
-    setPhase('loading')
+    let timer = null
 
-    const body = { actor_ids: ids, limit: 200 }
-    const la = typeof latitude === 'number' ? latitude : parseFloat(String(latitude ?? ''))
-    const lo = typeof longitude === 'number' ? longitude : parseFloat(String(longitude ?? ''))
-    if (!Number.isNaN(la) && !Number.isNaN(lo)) {
-      body.latitude = la
-      body.longitude = lo
+    async function poll() {
+      try {
+        const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}`)
+        if (cancelled) return
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Group not found.')
+        const completed = Number(data.completed_count || 0)
+        const total = Number(data.member_count || (memberActorIds || []).filter(Boolean).length || 0)
+        setProgress({ completed, total })
+        setPhase(data.ready_for_recommendations || (total > 0 && completed >= total) ? 'ready' : 'waiting')
+      } catch {
+        if (!cancelled) setPhase('waiting')
+      }
+
+      if (!cancelled) {
+        timer = window.setTimeout(poll, 2000)
+      }
     }
 
-    ;(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/recommendations/group`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-        if (cancelled) return
-        await res.json().catch(() => ({}))
-      } catch {
-        /* still offer Next — results page loads its own data */
-      }
-      if (!cancelled) setPhase('ready')
-    })()
+    setPhase('loading')
+    poll()
 
     return () => {
       cancelled = true
+      if (timer) window.clearTimeout(timer)
     }
-  }, [groupExists, memberActorIds, latitude, longitude])
+  }, [groupExists, groupId, memberActorIds])
 
   if (!groupExists) {
     return (
       <div className="q-wait-page">
         <div className="q-wait-page__content">
           <p className="q-wait-page__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-wait-page__btn" onClick={onBackToGroup}>
             Back to groups
@@ -93,11 +90,13 @@ export function QuestionnaireWaitingPage({
         <div className="q-wait-page__copy">
           <p className="q-wait-page__brand">BigByte</p>
           <h1 className="q-wait-page__headline">
-            Collecting group preferences and finding the perfect restaurant…
+            Collecting group preferences and finding the perfect San Francisco food spot…
           </h1>
-          {phase === 'loading' ? (
+          {phase === 'loading' || phase === 'waiting' ? (
             <p className="q-wait-page__status" aria-live="polite">
-              Finding your group&apos;s top picks…
+              {progress.total
+                ? `${progress.completed} of ${progress.total} members have submitted preferences.`
+                : 'Waiting for group members to submit preferences.'}
             </p>
           ) : null}
           <div className="q-wait-page__actions">

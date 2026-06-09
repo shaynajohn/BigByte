@@ -12,8 +12,8 @@ const PRICE_TIERS = [
 /**
  * Price range step (Figma 31:277): ¼–½–¼ layout, $–$$$$ multi-select + dealbreaker.
  */
-export function QuestionnairePricePage({ groupId, groupExists, onBack, onComplete }) {
-  const initial = useMemo(() => loadPriceDraft(groupId), [groupId])
+export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, onComplete }) {
+  const initial = useMemo(() => loadPriceDraft(groupId, actorId), [groupId, actorId])
   const [selected, setSelected] = useState(() => new Set(initial?.price_tiers_accepted ?? []))
   const [dealbreaker, setDealbreaker] = useState(initial?.price_dealbreaker_level ?? 3)
   const [localError, setLocalError] = useState('')
@@ -36,7 +36,7 @@ export function QuestionnairePricePage({ groupId, groupExists, onBack, onComplet
     }
     const price_tiers_accepted = [...selected].sort((a, b) => a - b)
     const price_dealbreaker_level = dealbreaker
-    savePriceDraft(groupId, { price_tiers_accepted, price_dealbreaker_level })
+    savePriceDraft(groupId, { price_tiers_accepted, price_dealbreaker_level }, actorId)
     onComplete({ price_tiers_accepted, price_dealbreaker_level })
   }
 
@@ -63,7 +63,7 @@ export function QuestionnairePricePage({ groupId, groupExists, onBack, onComplet
         {asideLeft}
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back

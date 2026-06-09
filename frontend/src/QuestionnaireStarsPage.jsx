@@ -8,8 +8,8 @@ const STARS = [1, 2, 3, 4, 5]
  * First group questionnaire step (Figma 5:2): ¼ + ½ + ¼ layout — two edge photos and
  * acceptable star ratings + dealbreaker in the center column.
  */
-export function QuestionnaireStarsPage({ groupId, groupExists, onBack, onComplete }) {
-  const initial = useMemo(() => loadStarsDraft(groupId), [groupId])
+export function QuestionnaireStarsPage({ groupId, groupExists, actorId, onBack, onComplete }) {
+  const initial = useMemo(() => loadStarsDraft(groupId, actorId), [groupId, actorId])
   const [selected, setSelected] = useState(() => new Set(initial?.star_ratings_accepted ?? []))
   const [dealbreaker, setDealbreaker] = useState(initial?.stars_dealbreaker_level ?? 3)
   const [localError, setLocalError] = useState('')
@@ -32,7 +32,7 @@ export function QuestionnaireStarsPage({ groupId, groupExists, onBack, onComplet
     }
     const star_ratings_accepted = [...selected].sort((a, b) => a - b)
     const stars_dealbreaker_level = dealbreaker
-    saveStarsDraft(groupId, { star_ratings_accepted, stars_dealbreaker_level })
+    saveStarsDraft(groupId, { star_ratings_accepted, stars_dealbreaker_level }, actorId)
     onComplete({ star_ratings_accepted, stars_dealbreaker_level })
   }
 
@@ -46,7 +46,7 @@ export function QuestionnaireStarsPage({ groupId, groupExists, onBack, onComplet
         </div>
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back

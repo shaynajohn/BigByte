@@ -46,6 +46,15 @@ CUISINE_SYNONYMS: dict[str, list[str]] = {
     ],
     "Barbeque": ["Barbeque", "Smokehouse"],
     "Seafood": ["Seafood", "Seafood Markets"],
+    "American": ["American (New)", "American (Traditional)", "Comfort Food"],
+    "French": ["French", "Bistros"],
+    "Filipino": ["Filipino"],
+    "Burmese": ["Burmese"],
+    "Ethiopian": ["Ethiopian", "African"],
+    "Vegetarian": ["Vegetarian", "Vegan"],
+    "Bakeries": ["Bakeries", "Donuts", "Bagels"],
+    "Desserts": ["Desserts", "Ice Cream & Frozen Yogurt", "Bubble Tea"],
+    "Coffee & Tea": ["Coffee & Tea", "Cafes"],
 }
 
 
@@ -191,6 +200,24 @@ def _dealbreaker_threshold_for_strength(base_threshold: float, strength: int | N
     return max(0.0, min(1.0, t))
 
 
+def _active_dealbreaker_strength(feature: dict[str, Any]) -> int | None:
+    """
+    Treat the 1..5 slider as a hard filter only near the "Dealbreaker" end.
+    Lower values still affect ranking via importance, but should not eliminate
+    otherwise reasonable San Francisco food spots.
+    """
+    strength = feature.get("dealbreaker_strength")
+    if strength is not None:
+        try:
+            s = int(strength)
+        except Exception:
+            return None
+        return s if s >= 4 else None
+    if int(feature.get("importance") or 1) == 5:
+        return 5
+    return None
+
+
 def _sat_bool(user_pref: bool | None, restaurant_val: bool | None) -> float:
     """
     Satisfaction for tri-state booleans.
@@ -267,7 +294,7 @@ def _expand_cuisine_selection(selection: list[str] | None) -> dict[str, set[str]
 def _sat_categories(user_selected: list[str] | None, restaurant_categories: str | None) -> float:
     """
     Satisfaction based on curated cuisine chip selections.
-    Score is the fraction of selected chips that match at least one synonym token.
+    Multiple selected chips mean "any of these sound good", not "must match all".
     """
     selected = [str(x) for x in (user_selected or []) if str(x).strip()]
     if not selected:
@@ -276,11 +303,10 @@ def _sat_categories(user_selected: list[str] | None, restaurant_categories: str 
     if not rest_toks:
         return 0.5
     expanded = _expand_cuisine_selection(selected)
-    hits = 0
     for _, syns in expanded.items():
         if rest_toks.intersection(syns):
-            hits += 1
-    return hits / max(1, len(expanded))
+            return 1.0
+    return 0.0
 
 
 def score_group_by_feature_importance(
@@ -377,6 +403,7 @@ def score_group_by_feature_importance(
         return max(0.0, min(1.0, total / total_w)), contrib
 
     scored: list[dict[str, Any]] = []
+    soft_scored: list[dict[str, Any]] = []
     for r in restaurants:
         member_utils: list[float] = []
         dealbreaker_failed = False
@@ -388,15 +415,11 @@ def score_group_by_feature_importance(
             per_member.append({"utility": u, "feature_satisfaction": contrib})
 
             feats = (m.get("features") or {}) if isinstance(m, dict) else {}
-            # Enforce dealbreakers:
-            # - explicit dealbreaker_strength (1..5), or
-            # - backward-compatible importance==5.
+            # Enforce only actual dealbreakers; relaxed slider values rank but do not reject.
             for fname, fobj in feats.items():
                 if not isinstance(fobj, dict):
                     continue
-                strength = fobj.get("dealbreaker_strength")
-                if strength is None and int(fobj.get("importance") or 1) == 5:
-                    strength = 5
+                strength = _active_dealbreaker_strength(fobj)
                 if strength is None:
                     continue
                 sat = contrib.get(fname)
@@ -408,10 +431,8 @@ def score_group_by_feature_importance(
                 if float(sat) < float(effective_threshold):
                     dealbreaker_failed = True
                     break
-            if dealbreaker_failed:
-                break
 
-        if dealbreaker_failed or not member_utils:
+        if not member_utils:
             continue
 
         avg_u = sum(member_utils) / len(member_utils)
@@ -424,10 +445,19 @@ def score_group_by_feature_importance(
         rr["_min_utility"] = min_u
         rr["_group_score"] = group_score
         rr["_member_debug"] = per_member
-        scored.append(rr)
+        if dealbreaker_failed:
+            rr["_relaxed_dealbreaker_fallback"] = True
+            soft_scored.append(rr)
+        else:
+            scored.append(rr)
 
     scored.sort(key=lambda x: float(x.get("_group_score") or 0.0), reverse=True)
-    return scored
+    soft_scored.sort(key=lambda x: float(x.get("_group_score") or 0.0), reverse=True)
+    if scored:
+        seen_ids = {row.get("id") for row in scored}
+        fallback = [row for row in soft_scored if row.get("id") not in seen_ids]
+        return [*scored, *fallback]
+    return soft_scored
 
 
 def score_single_candidate_by_feature_importance(
@@ -500,9 +530,7 @@ def score_single_candidate_by_feature_importance(
     for fname, fobj in feats.items():
         if not isinstance(fobj, dict):
             continue
-        strength = fobj.get("dealbreaker_strength")
-        if strength is None and int(fobj.get("importance") or 1) == 5:
-            strength = 5
+        strength = _active_dealbreaker_strength(fobj)
         if strength is None:
             continue
         sat = contrib.get(fname)

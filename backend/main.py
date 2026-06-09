@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .demo_catalog import DEMO_BAY_AREA_RESTAURANTS
+from .demo_catalog import DEMO_SAN_FRANCISCO_FOOD_SPOTS
 from .recommender_rules import (
     contains_any_category,
     extract_price_level,
@@ -44,7 +44,7 @@ def random_code() -> str:
 
 
 def demo_candidates(limit: int) -> list[dict[str, Any]]:
-    return [dict(r, attributes=dict(r.get("attributes") or {})) for r in DEMO_BAY_AREA_RESTAURANTS][
+    return [dict(r, attributes=dict(r.get("attributes") or {})) for r in DEMO_SAN_FRANCISCO_FOOD_SPOTS][
         :limit
     ]
 
@@ -142,7 +142,7 @@ class CreateGroupRequest(BaseModel):
 
 
 class JoinGroupRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
+    name: str | None = Field(default=None, max_length=80)
     actor_id: str | None = Field(default=None, max_length=200)
 
 
@@ -189,10 +189,19 @@ def get_group(group_id: str) -> dict[str, Any]:
     if not group:
         raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
     done = set((group.get("answers") or {}).keys())
+    member_actor_ids = [
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    ]
+    pending = sorted(set(member_actor_ids) - done)
     return {
         **group,
         "completed_actor_ids": sorted(done),
         "completed_count": len(done),
+        "member_count": len(member_actor_ids),
+        "pending_actor_ids": pending,
+        "ready_for_recommendations": bool(member_actor_ids) and not pending,
     }
 
 
@@ -205,9 +214,10 @@ def join_group(group_id: str, payload: JoinGroupRequest) -> dict[str, Any]:
     existing = next((m for m in group["members"] if m.get("actor_id") == actor_id), None)
     if existing:
         return {"group": group, "member": existing}
+    member_name = (payload.name or "").strip() or f"Participant {len(group.get('members', [])) + 1}"
     member = {
         "id": secrets.token_urlsafe(6),
-        "name": payload.name.strip(),
+        "name": member_name,
         "actor_id": actor_id,
         "joined_at": now_iso(),
     }
@@ -220,6 +230,13 @@ def save_group_answers(group_id: str, payload: SaveAnswersRequest) -> dict[str, 
     group = GROUPS.get(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+    member_actor_ids = {
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    }
+    if member_actor_ids and payload.actor_id not in member_actor_ids:
+        raise HTTPException(status_code=400, detail="Actor is not a member of this group.")
     group.setdefault("answers", {})[payload.actor_id] = {
         "features": {
             k: {
@@ -231,7 +248,13 @@ def save_group_answers(group_id: str, payload: SaveAnswersRequest) -> dict[str, 
         },
         "updated_at": now_iso(),
     }
-    return {"ok": True, "completed_count": len(group.get("answers") or {})}
+    completed_count = len(group.get("answers") or {})
+    return {
+        "ok": True,
+        "completed_count": completed_count,
+        "member_count": len(member_actor_ids),
+        "ready_for_recommendations": bool(member_actor_ids) and completed_count >= len(member_actor_ids),
+    }
 
 
 @app.post("/api/groups/{group_id}/recommendations")
@@ -240,6 +263,17 @@ def recommend_for_session_group(group_id: str, payload: SessionRecommendRequest)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
     answers = group.get("answers") or {}
+    member_actor_ids = {
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    }
+    missing = sorted(member_actor_ids - set(answers.keys()))
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Waiting for {len(missing)} group member(s) to submit preferences.",
+        )
     members = [
         {"actor_id": actor_id, "features": row.get("features") or {}}
         for actor_id, row in answers.items()

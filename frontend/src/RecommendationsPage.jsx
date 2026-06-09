@@ -3,6 +3,20 @@ import './recommendations.css'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
+const CATEGORY_IMAGES = [
+  { test: /coffee|tea|cafe/i, url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80' },
+  { test: /baker|donut|bagel|bread|pastr/i, url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80' },
+  { test: /dessert|ice cream|bubble tea|boba/i, url: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=900&q=80' },
+  { test: /pizza/i, url: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=900&q=80' },
+  { test: /burger|sandwich/i, url: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=80' },
+  { test: /ramen|japanese|sushi|izakaya/i, url: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80' },
+  { test: /thai|vietnamese|burmese|asian/i, url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=900&q=80' },
+  { test: /mexican|taco|latin|cuban|filipino/i, url: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&q=80' },
+  { test: /italian|pasta|mediterranean|greek/i, url: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=900&q=80' },
+  { test: /seafood|oyster/i, url: 'https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&w=900&q=80' },
+  { test: /vegetarian|vegan|salad/i, url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80' },
+]
+
 function pickCuisineLabel(categories) {
   const raw = String(categories || '')
     .split(',')
@@ -46,6 +60,13 @@ function buildMapUrl(r) {
     : null
 }
 
+function buildImageUrl(r) {
+  if (r.image_url) return r.image_url
+  const haystack = `${r.name || ''} ${r.categories || ''}`
+  const hit = CATEGORY_IMAGES.find(({ test }) => test.test(haystack))
+  return hit?.url || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80'
+}
+
 function buildBlurb(r) {
   const parts = []
   if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
@@ -59,14 +80,11 @@ function buildBlurb(r) {
       `Cuisine fit for the group is about ${Math.round(Number(r.cuisine_group_fit) * 100)}%.`,
     )
   }
-  if (r.distance_miles != null && !Number.isNaN(Number(r.distance_miles))) {
-    parts.push(`About ${Number(r.distance_miles).toFixed(1)} miles from the meeting point.`)
-  }
   if (r.score != null) {
     parts.push(`Rank score ${typeof r.score === 'number' ? r.score.toFixed(2) : r.score}.`)
   }
   if (parts.length) return parts.join(' ')
-  return 'Each restaurant reflects how the place lines up with what your group said matters — flavors, budget, distance, and vibe.'
+  return 'Each pick reflects how the food spot lines up with what your group said matters: flavors, budget, distance, and vibe.'
 }
 
 function buildTags(r) {
@@ -101,9 +119,11 @@ function buildMeta(r) {
 function normalizeFromApi(rows) {
   return (rows || []).slice(0, 3).map((r) => ({
     id: String(r.restaurant_id ?? r.id ?? r.name),
-    name: r.name?.trim() || 'Restaurant',
+    name: r.name?.trim() || 'Food spot',
     location: buildLocationLine(r),
     mapUrl: buildMapUrl(r),
+    imageUrl: buildImageUrl(r),
+    imageAlt: `${r.name?.trim() || 'Food spot'} preview`,
     blurb: buildBlurb(r),
     meta: buildMeta(r),
     tags: buildTags(r),
@@ -114,6 +134,7 @@ function normalizeFromApi(rows) {
  * Figma 50:573 — group top picks; cards grow on hover / focus for readability.
  */
 export function RecommendationsPage({
+  groupId,
   groupExists,
   memberActorIds,
   groupFeaturePreferences,
@@ -133,7 +154,7 @@ export function RecommendationsPage({
     setRows([])
     setNote('')
     const ids = (memberActorIds || []).filter(Boolean)
-    if (!ids.length) {
+    if (!groupId && !ids.length) {
       setLoading(false)
       setNote('Add at least one group member profile before asking for recommendations.')
       setRows([])
@@ -141,7 +162,12 @@ export function RecommendationsPage({
     }
     const hasFeaturePreferences =
       groupFeaturePreferences && Object.keys(groupFeaturePreferences).length > 0
-    const body = hasFeaturePreferences
+    const body = groupId
+      ? {
+          limit: 200,
+          fairness_alpha: 0.7,
+        }
+      : hasFeaturePreferences
       ? {
           members: ids.map((id) => ({
             actor_id: id,
@@ -158,7 +184,9 @@ export function RecommendationsPage({
       body.longitude = lo
     }
     try {
-      const endpoint = hasFeaturePreferences
+      const endpoint = groupId
+        ? `/api/groups/${encodeURIComponent(groupId)}/recommendations`
+        : hasFeaturePreferences
         ? '/api/recommendations/group_features'
         : '/api/recommendations/group'
       const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -176,7 +204,7 @@ export function RecommendationsPage({
       }
       const top = normalizeFromApi(data.top_3)
       const note = data.note && !data.note.includes('Nothing is saved') ? data.note : ''
-      setNote(note || (top.length ? '' : 'No matching Bay Area restaurants yet. Try relaxing the group preferences.'))
+      setNote(note || (top.length ? '' : 'No matching San Francisco food spots yet. Try relaxing the group preferences.'))
       setRows(top)
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Could not load recommendations.')
@@ -184,7 +212,7 @@ export function RecommendationsPage({
     } finally {
       setLoading(false)
     }
-  }, [memberActorIds, groupFeaturePreferences, lat, lng])
+  }, [groupId, memberActorIds, groupFeaturePreferences, lat, lng])
 
   useEffect(() => {
     if (!groupExists) {
@@ -204,7 +232,7 @@ export function RecommendationsPage({
           <h1 className="rec-page__title">Your Group&apos;s Top Picks</h1>
         </div>
         <p className="rec-page__status">
-          This group is not on this device. Return to the group list or use a valid invite link.
+          This group is not available. Return to the group list or use a valid invite link.
         </p>
         <div className="rec-page__footer">
           <button type="button" className="rec-page__retry" onClick={onStartNewGroup}>
@@ -230,11 +258,14 @@ export function RecommendationsPage({
           {picks.map((r) => (
             <article key={r.id} className="rec-card" tabIndex={0}>
               <div className="rec-card__panel">
+                <div className="rec-card__image-wrap">
+                  <img className="rec-card__image" src={r.imageUrl} alt={r.imageAlt} loading="lazy" />
+                </div>
                 <div className="rec-card__body">
                   <h2 className="rec-card__name">{r.name}</h2>
                   {r.location ? <p className="rec-card__location">{r.location}</p> : null}
                   {r.meta.length ? (
-                    <div className="rec-card__meta" aria-label="Restaurant details">
+                    <div className="rec-card__meta" aria-label="Food spot details">
                       {r.meta.map((item) => (
                         <span key={item}>{item}</span>
                       ))}

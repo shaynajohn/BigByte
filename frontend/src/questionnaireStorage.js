@@ -1,4 +1,41 @@
 const questionnaireByGroup = {}
+const DEFAULT_ACTOR_ID = 'current-session'
+
+function actorKey(actorId) {
+  return String(actorId || DEFAULT_ACTOR_ID)
+}
+
+function getActorQuestionnaire(groupId, actorId = DEFAULT_ACTOR_ID) {
+  const groupRow = questionnaireByGroup[groupId]
+  if (!groupRow || typeof groupRow !== 'object') return null
+  if (groupRow.actors && typeof groupRow.actors === 'object') {
+    return groupRow.actors[actorKey(actorId)] || null
+  }
+  return groupRow
+}
+
+function patchActorQuestionnaire(groupId, actorId = DEFAULT_ACTOR_ID, draft) {
+  const key = actorKey(actorId)
+  const prevGroup =
+    questionnaireByGroup[groupId] && typeof questionnaireByGroup[groupId] === 'object'
+      ? questionnaireByGroup[groupId]
+      : {}
+  const prevActors =
+    prevGroup.actors && typeof prevGroup.actors === 'object' ? prevGroup.actors : {}
+  const prevActor = prevActors[key] && typeof prevActors[key] === 'object' ? prevActors[key] : {}
+  questionnaireByGroup[groupId] = {
+    ...prevGroup,
+    actors: {
+      ...prevActors,
+      [key]: {
+        ...prevActor,
+        ...draft,
+        updated_at: new Date().toISOString(),
+      },
+    },
+    updated_at: new Date().toISOString(),
+  }
+}
 
 const CUISINE_LABELS = {
   pizza: 'Pizza',
@@ -19,6 +56,15 @@ const CUISINE_LABELS = {
   caribbean: 'Caribbean',
   latin_american: 'Latin American',
   seafood: 'Seafood',
+  american: 'American',
+  french: 'French',
+  filipino: 'Filipino',
+  burmese: 'Burmese',
+  ethiopian: 'Ethiopian',
+  vegetarian: 'Vegetarian',
+  bakeries: 'Bakeries',
+  desserts: 'Desserts',
+  coffee: 'Coffee & Tea',
 }
 
 /**
@@ -27,9 +73,9 @@ const CUISINE_LABELS = {
  * @property {number} stars_dealbreaker_level
  */
 
-export function loadStarsDraft(groupId) {
+export function loadStarsDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     return {
       star_ratings_accepted: Array.isArray(row.star_ratings_accepted)
@@ -48,13 +94,9 @@ export function loadStarsDraft(groupId) {
 }
 
 /** Keep star question answers in memory for this browser tab only. */
-export function saveStarsDraft(groupId, draft) {
+export function saveStarsDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
@@ -79,6 +121,15 @@ const CUISINE_IDS = new Set([
   'caribbean',
   'latin_american',
   'seafood',
+  'american',
+  'french',
+  'filipino',
+  'burmese',
+  'ethiopian',
+  'vegetarian',
+  'bakeries',
+  'desserts',
+  'coffee',
 ])
 
 /**
@@ -87,9 +138,9 @@ const CUISINE_IDS = new Set([
  * @property {number} cuisine_dealbreaker_level
  */
 
-export function loadCuisineDraft(groupId) {
+export function loadCuisineDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const cuisine_types_selected = Array.isArray(row.cuisine_types_selected)
       ? row.cuisine_types_selected.filter((s) => typeof s === 'string' && CUISINE_IDS.has(s))
@@ -107,13 +158,9 @@ export function loadCuisineDraft(groupId) {
 }
 
 /** Keep cuisine mood answers in memory for this browser tab only. */
-export function saveCuisineDraft(groupId, draft) {
+export function saveCuisineDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
@@ -125,9 +172,9 @@ export function saveCuisineDraft(groupId, draft) {
  * @property {number} price_dealbreaker_level
  */
 
-export function loadPriceDraft(groupId) {
+export function loadPriceDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const price_tiers_accepted = Array.isArray(row.price_tiers_accepted)
       ? row.price_tiers_accepted.filter((n) => typeof n === 'number' && n >= 1 && n <= 4)
@@ -145,13 +192,9 @@ export function loadPriceDraft(groupId) {
 }
 
 /** Keep price range answers in memory for this browser tab only. */
-export function savePriceDraft(groupId, draft) {
+export function savePriceDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
@@ -173,8 +216,8 @@ function preferredPriceLevel(tiers) {
   return Math.round(valid.reduce((sum, n) => sum + n, 0) / valid.length)
 }
 
-export function getGroupFeaturePreferences(groupId) {
-  const row = questionnaireByGroup[groupId]
+export function getGroupFeaturePreferences(groupId, actorId) {
+  const row = getActorQuestionnaire(groupId, actorId)
   if (!row || typeof row !== 'object') return null
 
   const features = {
@@ -254,9 +297,9 @@ export function getGroupFeaturePreferences(groupId) {
 }
 
 /** Figma 35:314 — table service yes/no + dealbreaker */
-export function loadTableServiceDraft(groupId) {
+export function loadTableServiceDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const v = row.table_service
     const table_service = v === 'yes' || v === 'no' ? v : null
@@ -269,22 +312,18 @@ export function loadTableServiceDraft(groupId) {
   }
 }
 
-export function saveTableServiceDraft(groupId, draft) {
+export function saveTableServiceDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
 }
 
 /** Figma 35:365 */
-export function loadTakeoutDraft(groupId) {
+export function loadTakeoutDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const v = row.takeout_available
     const takeout_available = v === 'yes' || v === 'no' ? v : null
@@ -297,22 +336,18 @@ export function loadTakeoutDraft(groupId) {
   }
 }
 
-export function saveTakeoutDraft(groupId, draft) {
+export function saveTakeoutDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
 }
 
 /** Figma 35:388 */
-export function loadDeliveryDraft(groupId) {
+export function loadDeliveryDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const v = row.delivery_available
     const delivery_available = v === 'yes' || v === 'no' ? v : null
@@ -325,13 +360,9 @@ export function loadDeliveryDraft(groupId) {
   }
 }
 
-export function saveDeliveryDraft(groupId, draft) {
+export function saveDeliveryDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
@@ -340,9 +371,9 @@ export function saveDeliveryDraft(groupId, draft) {
 const AMBIANCE_IDS = new Set(['casual', 'classy', 'romantic', 'trendy', 'hipster', 'touristy'])
 
 /** Figma 35:411 */
-export function loadAmbianceDraft(groupId) {
+export function loadAmbianceDraft(groupId, actorId) {
   try {
-    const row = questionnaireByGroup[groupId]
+    const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     const ambiance_types_selected = Array.isArray(row.ambiance_types_selected)
       ? row.ambiance_types_selected.filter((s) => typeof s === 'string' && AMBIANCE_IDS.has(s))
@@ -356,22 +387,18 @@ export function loadAmbianceDraft(groupId) {
   }
 }
 
-export function saveAmbianceDraft(groupId, draft) {
+export function saveAmbianceDraft(groupId, draft, actorId) {
   try {
-    questionnaireByGroup[groupId] = {
-      ...questionnaireByGroup[groupId],
-      ...draft,
-      updated_at: new Date().toISOString(),
-    }
+    patchActorQuestionnaire(groupId, actorId, draft)
   } catch {
     /* ignore */
   }
 }
 
 /** Mark this tab's participant as finished the full questionnaire. */
-export function markQuestionnaireFlowComplete(groupId) {
+export function markQuestionnaireFlowComplete(groupId, actorId) {
   try {
-    const actorId = 'current-session'
+    const key = actorKey(actorId)
     const prev =
       questionnaireByGroup[groupId] && typeof questionnaireByGroup[groupId] === 'object'
         ? questionnaireByGroup[groupId]
@@ -384,7 +411,7 @@ export function markQuestionnaireFlowComplete(groupId) {
       ...prev,
       member_questionnaire_done: {
         ...prevDone,
-        [actorId]: new Date().toISOString(),
+        [key]: new Date().toISOString(),
       },
       updated_at: new Date().toISOString(),
     }

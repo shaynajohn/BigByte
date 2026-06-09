@@ -31,6 +31,20 @@ const CUISINES = [
   ['american', 'American'],
   ['bbq', 'BBQ'],
   ['french', 'French'],
+  ['filipino', 'Filipino'],
+  ['burmese', 'Burmese'],
+  ['ethiopian', 'Ethiopian'],
+  ['vegan', 'Vegetarian'],
+  ['vegetarian', 'Vegetarian'],
+  ['bakery', 'Bakeries'],
+  ['bakeries', 'Bakeries'],
+  ['pastry', 'Bakeries'],
+  ['dessert', 'Desserts'],
+  ['ice cream', 'Desserts'],
+  ['boba', 'Desserts'],
+  ['bubble tea', 'Desserts'],
+  ['coffee', 'Coffee & Tea'],
+  ['cafe', 'Coffee & Tea'],
 ]
 
 export function derivePreferencesFromText(raw) {

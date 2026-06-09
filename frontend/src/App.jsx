@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { derivePreferencesFromText } from './derivePreferences.js'
 import { JoinGroupPage } from './JoinGroupPage.jsx'
 import { LandingPage } from './LandingPage.jsx'
@@ -13,8 +13,8 @@ import { getGroupFeaturePreferences } from './questionnaireStorage.js'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-const BAY_AREA_MEETING_POINT = {
-  label: 'San Francisco Bay Area',
+const SAN_FRANCISCO_MEETING_POINT = {
+  label: 'San Francisco',
   anchor: 'San Francisco, CA',
   latitude: '37.7749',
   longitude: '-122.4194',
@@ -72,15 +72,20 @@ let inMemoryActorId = ''
 let inMemoryGroups = {}
 
 /** Stable guest actor for this browser tab only (`guest:<uuid>`). */
+function createActorId() {
+  return `guest:${crypto.randomUUID()}`
+}
+
 function getOrCreateActorId() {
   if (!inMemoryActorId) {
-    inMemoryActorId = `guest:${crypto.randomUUID()}`
+    inMemoryActorId = createActorId()
   }
   return inMemoryActorId
 }
 
-function randomId() {
-  return Math.random().toString(36).slice(2, 10)
+function setActiveActorId(nextActorId) {
+  inMemoryActorId = nextActorId
+  return inMemoryActorId
 }
 
 function getPath() {
@@ -152,6 +157,25 @@ function saveGroups(groups) {
   inMemoryGroups = groups
 }
 
+async function requestJson(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(
+      typeof data?.detail === 'string'
+        ? data.detail
+        : JSON.stringify(data?.detail) || `Request failed (${res.status})`,
+    )
+  }
+  return data
+}
+
 function getInviteUrl(groupId) {
   return `${window.location.origin}${window.location.pathname}#/join/${groupId}`
 }
@@ -169,26 +193,24 @@ function App() {
   const [route, setRoute] = useState(getPath())
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
-  const [groupVersion, setGroupVersion] = useState(0)
+  const [, setGroupVersion] = useState(0)
 
   const [flowStep, setFlowStep] = useState(FLOW.HOME)
   const [description, setDescription] = useState('')
   const [derived, setDerived] = useState(null)
   const [sessionPreferences, setSessionPreferences] = useState(null)
 
-  const [joinName, setJoinName] = useState('')
-
   const [recLoading, setRecLoading] = useState(false)
   const [recommendations, setRecommendations] = useState(null)
-  const [latInput, setLatInput] = useState(BAY_AREA_MEETING_POINT.latitude)
-  const [lngInput, setLngInput] = useState(BAY_AREA_MEETING_POINT.longitude)
+  const [latInput, setLatInput] = useState(SAN_FRANCISCO_MEETING_POINT.latitude)
+  const [lngInput, setLngInput] = useState(SAN_FRANCISCO_MEETING_POINT.longitude)
 
   const [groupRecLoading, setGroupRecLoading] = useState(false)
   const [groupRecommendations, setGroupRecommendations] = useState(null)
-  const [groupLatInput, setGroupLatInput] = useState(BAY_AREA_MEETING_POINT.latitude)
-  const [groupLngInput, setGroupLngInput] = useState(BAY_AREA_MEETING_POINT.longitude)
+  const [groupLatInput, setGroupLatInput] = useState(SAN_FRANCISCO_MEETING_POINT.latitude)
+  const [groupLngInput, setGroupLngInput] = useState(SAN_FRANCISCO_MEETING_POINT.longitude)
 
-  const [actorId] = useState(() => getOrCreateActorId())
+  const [actorId, setActorId] = useState(() => getOrCreateActorId())
 
   useEffect(() => {
     function onHashChange() {
@@ -199,6 +221,35 @@ function App() {
   }, [])
 
   const isMainFlow = route === '/' || route === ''
+
+  const cacheGroup = useCallback((group) => {
+    if (!group?.id) return
+    const groups = loadGroups()
+    groups[group.id] = group
+    saveGroups(groups)
+    setGroupVersion((n) => n + 1)
+  }, [])
+
+  const fetchGroupById = useCallback(async (groupId) => {
+    const group = await requestJson(`/api/groups/${encodeURIComponent(groupId)}`)
+    cacheGroup(group)
+    return group
+  }, [cacheGroup])
+
+  const saveCurrentQuestionnaireAnswers = useCallback(async (groupId) => {
+    const features = getGroupFeaturePreferences(groupId, actorId)
+    if (!features || !Object.keys(features).length) {
+      throw new Error('Complete the questionnaire before asking for group recommendations.')
+    }
+    await requestJson(`/api/groups/${encodeURIComponent(groupId)}/answers`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actor_id: actorId,
+        features,
+      }),
+    })
+    return fetchGroupById(groupId)
+  }, [actorId, fetchGroupById])
 
   function goDerived() {
     setError('')
@@ -269,7 +320,7 @@ function App() {
       () => {
         setStatus('')
         setError(
-          `Could not access your location. The ${BAY_AREA_MEETING_POINT.label} default is still ready to use.`,
+          `Could not access your location. The ${SAN_FRANCISCO_MEETING_POINT.label} default is still ready to use.`,
         )
       },
       { enableHighAccuracy: true, maximumAge: 300000, timeout: 10000 },
@@ -328,50 +379,25 @@ function App() {
     }
   }
 
-  async function fetchGroupRecommendations(memberActorIds) {
+  async function fetchGroupRecommendations(groupId) {
     setError('')
     setGroupRecLoading(true)
     setGroupRecommendations(null)
     const lat = parseFloat(groupLatInput)
     const lng = parseFloat(groupLngInput)
-    const featurePreferences =
-      groupFeaturePreferences || buildSessionFeaturePreferences(sessionPreferences)
-    const hasFeaturePreferences =
-      featurePreferences && Object.keys(featurePreferences).length > 0
-    const body = hasFeaturePreferences
-      ? {
-          members: memberActorIds.map((id) => ({
-            actor_id: id,
-            features: featurePreferences,
-          })),
-          limit: 200,
-          fairness_alpha: 0.7,
-        }
-      : {
-          actor_ids: memberActorIds,
-          limit: 200,
-        }
+    const body = {
+      limit: 200,
+      fairness_alpha: 0.7,
+    }
     if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
       body.latitude = lat
       body.longitude = lng
     }
     try {
-      const endpoint = hasFeaturePreferences
-        ? '/api/recommendations/group_features'
-        : '/api/recommendations/group'
-      const res = await fetch(`${API_BASE}${endpoint}`, {
+      const data = await requestJson(`/api/groups/${encodeURIComponent(groupId)}/recommendations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(
-          typeof data?.detail === 'string'
-            ? data.detail
-            : JSON.stringify(data?.detail) || `Recommend failed (${res.status})`,
-        )
-      }
       setGroupRecommendations(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -380,97 +406,89 @@ function App() {
     }
   }
 
-  function onStartGroup() {
+  async function onStartGroup() {
     setError('')
     setStatus('')
-    const groupId = randomId()
-    const groups = loadGroups()
-    groups[groupId] = {
-      id: groupId,
-      created_at: new Date().toISOString(),
-      members: [
-        {
-          id: randomId(),
-          name: 'You (host)',
-          actor_id: getOrCreateActorId(),
-          joined_at: new Date().toISOString(),
-        },
-      ],
+    try {
+      const group = await requestJson('/api/groups', {
+        method: 'POST',
+        body: JSON.stringify({
+          host_name: 'You (host)',
+          actor_id: actorId,
+        }),
+      })
+      cacheGroup(group)
+      navigate(`/group/${group.id}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-    saveGroups(groups)
-    setGroupVersion((n) => n + 1)
-    navigate(`/group/${groupId}`)
   }
 
-  /** Creates a local group and returns its join code (landing page). */
-  function createGroupFromLanding() {
+  /** Creates a backend group and returns its join code (landing page). */
+  async function createGroupFromLanding() {
     setError('')
     setStatus('')
-    const groupId = randomId()
-    const groups = loadGroups()
-    groups[groupId] = {
-      id: groupId,
-      created_at: new Date().toISOString(),
-      members: [
-        {
-          id: randomId(),
-          name: 'You (host)',
-          actor_id: getOrCreateActorId(),
-          joined_at: new Date().toISOString(),
-        },
-      ],
+    try {
+      const group = await requestJson('/api/groups', {
+        method: 'POST',
+        body: JSON.stringify({
+          host_name: 'You (host)',
+          actor_id: actorId,
+        }),
+      })
+      cacheGroup(group)
+      return group.id
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      return null
     }
-    saveGroups(groups)
-    setGroupVersion((n) => n + 1)
-    return groupId
   }
 
-  function joinWithCodeFromLanding(raw) {
+  async function joinWithCodeFromLanding(raw) {
     setError('')
     setStatus('')
-    const code = raw.trim()
+    const code = raw.trim().toLowerCase()
     if (!code) {
       setError('Enter a join code.')
       return
     }
-    const groups = loadGroups()
-    if (!groups[code]) {
-      setError('No group found with that code on this device.')
-      return
+    try {
+      const group = await fetchGroupById(code)
+      navigate(`/join/${group.id}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-    navigate(`/join/${code}`)
   }
 
-  function onJoinGroupSubmit(e, groupId) {
+  async function onJoinGroupSubmit(e, groupId) {
     e.preventDefault()
     setError('')
     setStatus('')
-    const name = joinName.trim()
-    if (!name) {
-      setError('Please enter your name.')
-      return
-    }
 
-    const groups = loadGroups()
-    const group = groups[groupId]
-    if (!group) {
-      setError('That group does not exist in this browser session.')
-      return
+    try {
+      const latest = await fetchGroupById(groupId)
+      const activeActorAlreadyInGroup = (latest?.members || []).some((m) => m.actor_id === actorId)
+      const activeActorAlreadySubmitted = (latest?.completed_actor_ids || []).includes(actorId)
+      if (activeActorAlreadyInGroup && !activeActorAlreadySubmitted) {
+        navigate(`/questionnaire/${groupId}`)
+        return
+      }
+      const joinActorId = activeActorAlreadyInGroup ? createActorId() : actorId
+      if (joinActorId !== actorId) {
+        setActorId(setActiveActorId(joinActorId))
+      }
+      const data = await requestJson(`/api/groups/${encodeURIComponent(groupId)}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `Participant ${(latest?.members?.length || 0) + 1}`,
+          actor_id: joinActorId,
+        }),
+      })
+      cacheGroup(data.group)
+      navigate(`/questionnaire/${groupId}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-
-    const memberId = randomId()
-    group.members = Array.isArray(group.members) ? group.members : []
-    group.members.push({
-      id: memberId,
-      name,
-      actor_id: getOrCreateActorId(),
-      joined_at: new Date().toISOString(),
-    })
-    groups[groupId] = group
-    saveGroups(groups)
-    setGroupVersion((n) => n + 1)
-    setJoinName('')
-    navigate(`/questionnaire/${groupId}`)
   }
 
   const parts = route.split('/').filter(Boolean)
@@ -490,30 +508,48 @@ function App() {
         ? parts[2]
         : 'stars'
       : 'stars'
-  const currentGroup = useMemo(() => {
-    if (!groupIdFromRoute) return null
-    const groups = loadGroups()
-    return groups[groupIdFromRoute] || null
-  }, [groupIdFromRoute, route, groupVersion])
+  const currentGroup = groupIdFromRoute ? loadGroups()[groupIdFromRoute] || null : null
+
+  useEffect(() => {
+    if (!groupIdFromRoute) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const group = await requestJson(`/api/groups/${encodeURIComponent(groupIdFromRoute)}`)
+        if (!cancelled) cacheGroup(group)
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [groupIdFromRoute, cacheGroup])
 
   const questionnaireMemberActorIds = useMemo(
     () => (currentGroup?.members || []).map((m) => m.actor_id).filter(Boolean),
     [currentGroup],
   )
 
-  const groupFeaturePreferences = useMemo(
-    () => (groupIdFromRoute ? getGroupFeaturePreferences(groupIdFromRoute) : null),
-    [groupIdFromRoute, route],
+  const activeActorIsCurrentGroupMember = useMemo(
+    () => questionnaireMemberActorIds.includes(actorId),
+    [questionnaireMemberActorIds, actorId],
   )
 
-  const allGroups = useMemo(() => {
-    const groups = loadGroups()
-    return Object.values(groups).sort((a, b) => {
-      const at = typeof a?.created_at === 'string' ? a.created_at : ''
-      const bt = typeof b?.created_at === 'string' ? b.created_at : ''
-      return bt.localeCompare(at)
-    })
-  }, [route, groupVersion])
+  const activeActorCompletedCurrentGroup = useMemo(
+    () => (currentGroup?.completed_actor_ids || []).includes(actorId),
+    [currentGroup, actorId],
+  )
+
+  const groupFeaturePreferences = groupIdFromRoute
+    ? getGroupFeaturePreferences(groupIdFromRoute, actorId)
+    : null
+
+  const allGroups = Object.values(loadGroups()).sort((a, b) => {
+    const at = typeof a?.created_at === 'string' ? a.created_at : ''
+    const bt = typeof b?.created_at === 'string' ? b.created_at : ''
+    return bt.localeCompare(at)
+  })
 
   const stepIndex =
     flowStep === FLOW.HOME
@@ -530,13 +566,14 @@ function App() {
 
   return (
     <div className="app-shell">
+      {!isMainFlow && error ? <p className="kahoot-error">{error}</p> : null}
       {isMainFlow ? (
         flowStep === FLOW.HOME ? (
           <LandingPage
             error={error}
             onCreateGroup={createGroupFromLanding}
             onJoinSubmit={joinWithCodeFromLanding}
-            onNavigateToGroup={(id) => navigate(`/join/${id}`)}
+            onNavigateToGroup={(id) => navigate(`/questionnaire/${id}`)}
           />
         ) : (
         <main className="kahoot-flow">
@@ -704,8 +741,8 @@ function App() {
               </p>
               <MeetingPointControls
                 idPrefix="rec"
-                title={BAY_AREA_MEETING_POINT.label}
-                hint={`Defaults to ${BAY_AREA_MEETING_POINT.anchor}; use your live location if the group is meeting somewhere more specific.`}
+                title={SAN_FRANCISCO_MEETING_POINT.label}
+                hint={`Defaults to ${SAN_FRANCISCO_MEETING_POINT.anchor}; use your live location if the group is meeting somewhere more specific.`}
                 latitude={latInput}
                 longitude={lngInput}
                 onLatitudeChange={setLatInput}
@@ -778,9 +815,8 @@ function App() {
             <QuestionnaireWaitingPage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               memberActorIds={questionnaireMemberActorIds}
-              latitude={parseFloat(groupLatInput)}
-              longitude={parseFloat(groupLngInput)}
               onBackToGroup={() => {
                 setError('')
                 navigate(`/group/${groupIdFromRoute}`)
@@ -792,6 +828,7 @@ function App() {
             />
           ) : questionnaireResults ? (
             <RecommendationsPage
+              groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
               memberActorIds={questionnaireMemberActorIds}
               groupFeaturePreferences={groupFeaturePreferences}
@@ -806,19 +843,24 @@ function App() {
             <QuestionnaireAmbiancePage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               onBack={() => {
                 setError('')
                 navigate(`/questionnaire/${groupIdFromRoute}/6`)
               }}
               onComplete={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/waiting`)
+                saveCurrentQuestionnaireAnswers(groupIdFromRoute)
+                  .then(() => navigate(`/questionnaire/${groupIdFromRoute}/waiting`))
+                  .catch((e) => setError(e instanceof Error ? e.message : String(e)))
               }}
             />
           ) : questionnaireStep === '6' ? (
             <QuestionnaireBooleanStepPage
+              key="delivery"
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               variant="delivery"
               onBack={() => {
                 setError('')
@@ -831,8 +873,10 @@ function App() {
             />
           ) : questionnaireStep === '5' ? (
             <QuestionnaireBooleanStepPage
+              key="takeout"
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               variant="takeout"
               onBack={() => {
                 setError('')
@@ -845,8 +889,10 @@ function App() {
             />
           ) : questionnaireStep === '4' ? (
             <QuestionnaireBooleanStepPage
+              key="table-service"
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               variant="table_service"
               onBack={() => {
                 setError('')
@@ -861,6 +907,7 @@ function App() {
             <QuestionnairePricePage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               onBack={() => {
                 setError('')
                 navigate(`/questionnaire/${groupIdFromRoute}/2`)
@@ -874,6 +921,7 @@ function App() {
             <QuestionnaireStep2Page
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               onBack={() => {
                 setError('')
                 navigate(`/questionnaire/${groupIdFromRoute}`)
@@ -887,6 +935,7 @@ function App() {
             <QuestionnaireStarsPage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               onBack={() => {
                 setError('')
                 navigate('/')
@@ -901,8 +950,6 @@ function App() {
           <JoinGroupPage
             groupId={groupIdFromRoute}
             groupExists={!!currentGroup}
-            joinName={joinName}
-            onJoinNameChange={setJoinName}
             onSubmit={(e) => onJoinGroupSubmit(e, groupIdFromRoute)}
             onCancel={() => {
               setError('')
@@ -1015,9 +1062,15 @@ function App() {
                   <button
                     type="button"
                     className="kahoot-btn kahoot-btn--primary"
-                    onClick={() => navigate(`/join/${groupIdFromRoute}`)}
+                    onClick={() =>
+                      activeActorIsCurrentGroupMember && !activeActorCompletedCurrentGroup
+                        ? navigate(`/questionnaire/${groupIdFromRoute}`)
+                        : navigate(`/join/${groupIdFromRoute}`)
+                    }
                   >
-                    Join this group
+                    {activeActorIsCurrentGroupMember && !activeActorCompletedCurrentGroup
+                      ? 'Complete questionnaire'
+                      : 'Join this group'}
                   </button>
                 </div>
                 <p className="kahoot-hint">Members:</p>
@@ -1040,13 +1093,13 @@ function App() {
                   )}
                 </ul>
                 <p className="kahoot-hint" style={{ marginTop: 16 }}>
-                  Each person should complete the flow in this browser session. Then use the
+                  Share the invite code or link, then have each person complete the flow. Use the
                   meeting point below for distance filtering.
                 </p>
                 <MeetingPointControls
                   idPrefix="grp"
-                  title={`${BAY_AREA_MEETING_POINT.label} group spot`}
-                  hint={`Start from ${BAY_AREA_MEETING_POINT.anchor}, or use the host's current location as the meetup point.`}
+                  title={`${SAN_FRANCISCO_MEETING_POINT.label} group spot`}
+                  hint={`Start from ${SAN_FRANCISCO_MEETING_POINT.anchor}, or use the host's current location as the meetup point.`}
                   latitude={groupLatInput}
                   longitude={groupLngInput}
                   onLatitudeChange={setGroupLatInput}
@@ -1059,16 +1112,11 @@ function App() {
                     className="kahoot-btn kahoot-btn--primary"
                     disabled={groupRecLoading}
                     onClick={() => {
-                      const ids = (currentGroup?.members || [])
-                        .map((m) => m.actor_id)
-                        .filter(Boolean)
-                      if (!ids.length) {
-                        setError(
-                          'No member actor ids in this group. Create or join the group with the current app version so profiles can be linked.',
-                        )
+                      if (!groupIdFromRoute) {
+                        setError('Open a group before asking for recommendations.')
                         return
                       }
-                      fetchGroupRecommendations(ids)
+                      fetchGroupRecommendations(groupIdFromRoute)
                     }}
                   >
                     {groupRecLoading ? 'Loading…' : 'Get group recommendations'}

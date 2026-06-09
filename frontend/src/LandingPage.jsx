@@ -7,10 +7,16 @@ import './landing.css'
 export function LandingPage({ error, onCreateGroup, onJoinSubmit, onNavigateToGroup }) {
   const [generatedCode, setGeneratedCode] = useState(null)
   const [joinCode, setJoinCode] = useState('')
+  const [creating, setCreating] = useState(false)
 
-  function handleCreate() {
-    const id = onCreateGroup()
-    setGeneratedCode(id)
+  async function handleCreate() {
+    setCreating(true)
+    try {
+      const id = await onCreateGroup()
+      if (id) setGeneratedCode(id)
+    } finally {
+      setCreating(false)
+    }
   }
 
   function handleJoin(e) {
@@ -63,8 +69,13 @@ export function LandingPage({ error, onCreateGroup, onJoinSubmit, onNavigateToGr
                 </form>
               </div>
               <div className="landing__actions-col" aria-label="Create group">
-                <button type="button" className="landing__btn landing__btn--create" onClick={handleCreate}>
-                  Create group
+                <button
+                  type="button"
+                  className="landing__btn landing__btn--create"
+                  onClick={handleCreate}
+                  disabled={creating}
+                >
+                  {creating ? 'Creating…' : 'Create group'}
                 </button>
                 <div className="landing__code-area">
                   {generatedCode ? (

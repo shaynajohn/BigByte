@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import {
   loadTableServiceDraft,
   saveTableServiceDraft,
@@ -67,20 +67,13 @@ const BOOLEAN_STEP_CONFIG = {
  * @param {() => void} props.onBack
  * @param {() => void} props.onComplete
  */
-export function QuestionnaireBooleanStepPage({ groupId, groupExists, variant, onBack, onComplete }) {
+export function QuestionnaireBooleanStepPage({ groupId, groupExists, actorId, variant, onBack, onComplete }) {
   const cfg = BOOLEAN_STEP_CONFIG[variant]
-  const initial = useMemo(() => cfg.load(groupId), [groupId, cfg])
+  const initial = useMemo(() => cfg.load(groupId, actorId), [groupId, actorId, cfg])
   const [value, setValue] = useState(() => initial?.[cfg.valueKey] ?? null)
   const [dealbreaker, setDealbreaker] = useState(() => initial?.[cfg.dealbreakerKey] ?? 3)
   const [localError, setLocalError] = useState('')
 
-  /* Same component instance is reused across variants; re-sync from this step's draft. */
-  useEffect(() => {
-    const loaded = cfg.load(groupId)
-    setValue(loaded?.[cfg.valueKey] ?? null)
-    setDealbreaker(loaded?.[cfg.dealbreakerKey] ?? 3)
-    setLocalError('')
-  }, [groupId, variant, cfg])
   const titleId = useId()
 
   const asideLeft = (
@@ -104,9 +97,9 @@ export function QuestionnaireBooleanStepPage({ groupId, groupExists, variant, on
       cfg.save(groupId, {
         [cfg.valueKey]: nextValue,
         [cfg.dealbreakerKey]: nextDealbreaker,
-      })
+      }, actorId)
     },
-    [cfg, groupId],
+    [cfg, groupId, actorId],
   )
 
   function handleNext() {
@@ -125,7 +118,7 @@ export function QuestionnaireBooleanStepPage({ groupId, groupExists, variant, on
         {asideLeft}
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back

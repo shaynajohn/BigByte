@@ -22,13 +22,22 @@ const MOOD_CUISINES = [
   { id: 'caribbean', label: 'Caribbean' },
   { id: 'latin_american', label: 'Latin American' },
   { id: 'seafood', label: 'Seafood' },
+  { id: 'american', label: 'American' },
+  { id: 'french', label: 'French' },
+  { id: 'filipino', label: 'Filipino' },
+  { id: 'burmese', label: 'Burmese' },
+  { id: 'ethiopian', label: 'Ethiopian' },
+  { id: 'vegetarian', label: 'Vegetarian' },
+  { id: 'bakeries', label: 'Bakeries' },
+  { id: 'desserts', label: 'Desserts' },
+  { id: 'coffee', label: 'Coffee & Tea' },
 ]
 
 /**
  * Second questionnaire step (Figma 27:94): cuisine moods + dealbreaker, ¼–½–¼ layout.
  */
-export function QuestionnaireStep2Page({ groupId, groupExists, onBack, onNext }) {
-  const initial = useMemo(() => loadCuisineDraft(groupId), [groupId])
+export function QuestionnaireStep2Page({ groupId, groupExists, actorId, onBack, onNext }) {
+  const initial = useMemo(() => loadCuisineDraft(groupId, actorId), [groupId, actorId])
   const [selected, setSelected] = useState(
     () => new Set(initial?.cuisine_types_selected ?? []),
   )
@@ -57,7 +66,7 @@ export function QuestionnaireStep2Page({ groupId, groupExists, onBack, onNext })
       return ia - ib
     })
     const cuisine_dealbreaker_level = dealbreaker
-    saveCuisineDraft(groupId, { cuisine_types_selected, cuisine_dealbreaker_level })
+    saveCuisineDraft(groupId, { cuisine_types_selected, cuisine_dealbreaker_level }, actorId)
     onNext({ cuisine_types_selected, cuisine_dealbreaker_level })
   }
 
@@ -89,7 +98,7 @@ export function QuestionnaireStep2Page({ groupId, groupExists, onBack, onNext })
         {asideLeft}
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not on this device. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back

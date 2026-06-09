@@ -6,8 +6,6 @@ import './landing.css'
 export function JoinGroupPage({
   groupId,
   groupExists,
-  joinName,
-  onJoinNameChange,
   onSubmit,
   onCancel,
   onBackHome,
@@ -44,24 +42,15 @@ export function JoinGroupPage({
               <div className="landing__join-form-fields">
                 {!groupExists ? (
                   <p className="landing__join-missing">
-                    Group not found on this device. Check the code or ask the host to create the
-                    group again.
+                    Group not found yet. Check the code or make sure the backend server is running.
                   </p>
                 ) : null}
 
-                <label className="landing__label" htmlFor="join-name">
-                  Your name
-                </label>
-                <input
-                  id="join-name"
-                  className="landing__input landing__input--join"
-                  type="text"
-                  value={joinName}
-                  onChange={(e) => onJoinNameChange(e.target.value)}
-                  required
-                  autoComplete="name"
-                  disabled={!groupExists}
-                />
+                {groupExists ? (
+                  <p className="landing__join-missing">
+                    Ready to add your preferences to this group.
+                  </p>
+                ) : null}
 
                 <div className="landing__join-actions landing__join-actions--submit-only">
                   <button type="submit" className="landing__btn" disabled={!groupExists}>
