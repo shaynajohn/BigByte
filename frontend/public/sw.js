@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bigbyte-static-v1'
+const CACHE_NAME = 'bigbyte-static-v2'
 const CORE_ASSETS = ['/', '/manifest.webmanifest', '/app-icon.svg', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -27,13 +27,12 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) return
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         const copy = response.clone()
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
         return response
       })
-    }),
+      .catch(() => caches.match(event.request)),
   )
 })

@@ -566,42 +566,51 @@
 
 @media (max-width: 768px) {
   .q-stars-page {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(18vh, 140px) auto minmax(18vh, 140px);
-  }
-
-  .q-stars__aside--left {
-    grid-row: 1;
-    min-height: min(24vh, 180px);
+    display: block;
+    min-height: 100svh;
   }
 
   .q-stars__main {
-    grid-row: 2;
+    min-height: 100svh;
+    padding: max(0.85rem, env(safe-area-inset-top, 0px)) 1rem
+      max(1.25rem, env(safe-area-inset-bottom, 0px));
+    justify-content: flex-start;
   }
 
+  .q-stars__aside--left,
   .q-stars__aside--right {
-    grid-row: 3;
-    min-height: min(24vh, 180px);
+    display: none;
   }
 
-  .q-stars__aside-crop--left img,
-  .q-stars__aside-crop--right img,
-  .q-stars__aside-crop--step2-right img,
-  .q-stars__aside-crop--price-left img,
-  .q-stars__aside-crop--price-right img,
-  .q-stars__aside-crop--table-left img,
-  .q-stars__aside-crop--table-right img,
-  .q-stars__aside-crop--takeout-left img,
-  .q-stars__aside-crop--takeout-right img,
-  .q-stars__aside-crop--delivery-left img,
-  .q-stars__aside-crop--delivery-right img,
-  .q-stars__aside-crop--ambiance-left img,
-  .q-stars__aside-crop--ambiance-right img {
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    min-height: 100%;
-    object-position: center center;
+  .q-stars__title {
+    font-size: clamp(1.45rem, 7vw, 2rem);
+    margin-bottom: 1rem;
+  }
+
+  .q-stars__options {
+    max-width: 100%;
+  }
+
+  .q-stars__option-btn {
+    min-height: 3.65rem;
+    font-size: clamp(1.1rem, 6vw, 1.55rem);
+  }
+
+  .q-cuisine__tags {
+    gap: 0.5rem;
+  }
+
+  .q-cuisine__pill {
+    min-height: 2.65rem;
+    border-width: 2px;
+    font-size: 0.95rem;
+  }
+
+  .q-stars__dealbreaker {
+    margin-top: 1.25rem;
+  }
+
+  .q-stars__next {
+    margin-top: 1.35rem;
   }
 }

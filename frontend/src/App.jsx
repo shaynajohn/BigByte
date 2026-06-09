@@ -12,7 +12,8 @@ import { RecommendationsPage } from './RecommendationsPage.jsx'
 import { getGroupFeaturePreferences } from './questionnaireStorage.js'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const API_BASE =
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 const SAN_FRANCISCO_MEETING_POINT = {
   label: 'San Francisco',
   anchor: 'San Francisco, CA',

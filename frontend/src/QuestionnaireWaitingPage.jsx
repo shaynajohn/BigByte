@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { markQuestionnaireFlowComplete } from './questionnaireStorage.js'
 import './questionnaire-waiting.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const API_BASE =
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 /** Figma 43:518 — five photos on the orbit. */
 const WAITING_ORBIT_SLOTS = [

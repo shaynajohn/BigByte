@@ -317,19 +317,57 @@
 }
 
 @media (max-width: 720px) {
+  .rec-page {
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  }
+
+  .rec-page__brand {
+    font-size: clamp(4.5rem, 24vw, 7.5rem);
+  }
+
+  .rec-page__title {
+    padding-block: 0.25rem;
+    font-size: clamp(1.4rem, 7vw, 2.1rem);
+  }
+
   .rec-cards {
-    flex-wrap: wrap;
+    flex-direction: column;
+    flex-wrap: nowrap;
     min-height: auto;
+    padding-inline: 1rem;
+    gap: 1rem;
   }
 
   .rec-card {
-    flex: 1 1 calc(50% - 0.5rem);
-    min-width: min(100%, 240px);
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: auto;
   }
 
   .rec-card__panel {
-    min-height: clamp(11rem, 36vh, 18rem);
+    min-height: 0;
+  }
+
+  .rec-card__image-wrap {
+    aspect-ratio: 4 / 3;
+  }
+
+  .rec-card__body {
+    padding: 0.9rem;
+  }
+
+  .rec-card__name {
+    font-size: clamp(1.45rem, 8vw, 2.05rem);
+  }
+
+  .rec-card__blurb {
+    font-size: 1rem;
+  }
+
+  .rec-card__tags {
+    margin-top: 0.5rem;
+    padding-inline: 0.5rem;
   }
 
   .rec-cards:hover .rec-card:hover,

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './recommendations.css'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const API_BASE =
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 const CATEGORY_IMAGES = [
   { test: /coffee|tea|cafe/i, url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80' },

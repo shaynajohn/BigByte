@@ -259,3 +259,39 @@
     animation: none;
   }
 }
+
+@media (max-width: 640px) {
+  .q-wait-page {
+    grid-template-rows: auto minmax(170px, 28vh);
+  }
+
+  .q-wait-page__content {
+    justify-content: center;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem 0.75rem;
+  }
+
+  .q-wait-page__copy {
+    gap: 0.75rem;
+  }
+
+  .q-wait-page__brand {
+    font-size: clamp(5rem, 26vw, 8rem);
+  }
+
+  .q-wait-page__headline {
+    font-size: clamp(1.35rem, 7vw, 2rem);
+  }
+
+  .q-wait__stage {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .q-wait__stage-inner {
+    --orbit-r: clamp(72px, 24vw, 100px);
+  }
+
+  .q-wait__slot--orbit {
+    width: clamp(58px, 19vw, 82px);
+    height: clamp(58px, 19vw, 82px);
+  }
+}
