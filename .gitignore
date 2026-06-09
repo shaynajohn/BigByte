@@ -1,0 +1,16 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.db
+.env
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.cursor/

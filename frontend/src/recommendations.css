@@ -1,0 +1,325 @@
+/* Group top picks — Figma 50:573 (text-only cards, full-width row, hover scale) */
+
+.rec-page {
+  --rec-bg: #3c0000;
+  --rec-cream: #f5eedc;
+  --rec-cream-soft: rgba(245, 238, 220, 0.2);
+  --rec-cream-mid: rgba(245, 238, 220, 0.5);
+
+  min-height: 100svh;
+  min-height: 100dvh;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--rec-bg);
+  color: var(--rec-cream);
+  padding: clamp(0.35rem, 1.5vw, 0.75rem) 0 clamp(1.25rem, 3vh, 2rem);
+  overflow-x: clip;
+  display: flex;
+  flex-direction: column;
+}
+
+.rec-page__header {
+  text-align: center;
+  max-width: min(90rem, 100%);
+  margin-inline: auto;
+  padding-inline: clamp(0.5rem, 2vw, 1.25rem);
+  flex-shrink: 0;
+}
+
+.rec-page__brand {
+  margin: 0;
+  font-family: 'Island Moments', cursive;
+  font-weight: 400;
+  font-size: clamp(3.5rem, 12vw, 12.5rem);
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+  color: var(--rec-cream);
+}
+
+.rec-page__title {
+  margin: clamp(0.15rem, 1vw, 0.35rem) 0 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(1.35rem, 3.8vw, 3.4375rem);
+  line-height: 1.1;
+  color: var(--rec-cream);
+}
+
+.rec-page__status {
+  margin: 0.75rem auto 0;
+  max-width: 36rem;
+  padding-inline: clamp(0.5rem, 2vw, 1.25rem);
+  text-align: center;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(245, 238, 220, 0.88);
+}
+
+.rec-page__retry {
+  margin-top: 0.65rem;
+  padding: 0.45rem 1.1rem;
+  border: 2px solid var(--rec-cream);
+  border-radius: 0.75rem;
+  background: var(--rec-cream-soft);
+  color: var(--rec-cream);
+  font-family: 'Jacques Francois', serif;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.rec-page__retry:hover {
+  background: rgba(245, 238, 220, 0.32);
+}
+
+.rec-page__footer {
+  text-align: center;
+  margin-top: clamp(1rem, 3vh, 2rem);
+  padding-inline: clamp(0.5rem, 2vw, 1.25rem);
+  flex-shrink: 0;
+}
+
+.rec-page__footer--inline {
+  margin-top: 0;
+}
+
+.rec-page__stretch {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: clamp(0.5rem, 1.5vh, 1rem);
+}
+
+.rec-page__stretch > .rec-page__status {
+  margin-top: 0;
+}
+
+.rec-cards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: clamp(0.4rem, 1vw, 0.85rem);
+  width: 100%;
+  max-width: none;
+  flex: 1 1 auto;
+  min-height: clamp(14rem, 32vh, 22rem);
+  margin: 0;
+  padding-inline: clamp(0.35rem, 1vw, 0.65rem);
+  box-sizing: border-box;
+}
+
+.rec-card {
+  --rec-body-fs: clamp(0.88rem, 1.25vw, 1.05rem);
+  --rec-pill-fs: clamp(0.8rem, 1.05vw, 1rem);
+  --rec-pill-h: clamp(2.2rem, 3vw, 2.55rem);
+  --rec-panel-bg: var(--rec-cream-soft);
+
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  box-sizing: border-box;
+  transition:
+    flex 0.38s cubic-bezier(0.33, 1, 0.68, 1),
+    transform 0.35s ease;
+}
+
+.rec-card:focus {
+  outline: none;
+}
+
+.rec-card:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+.rec-card__panel {
+  border: 3px solid var(--rec-cream);
+  border-radius: 10px;
+  background: var(--rec-panel-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: clamp(12rem, 28vh, 20rem);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.rec-card__body {
+  padding: clamp(1rem, 2.6vw, 1.5rem) clamp(0.65rem, 1.8vw, 1.1rem)
+    clamp(1.15rem, 2.8vw, 1.6rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.4vw, 0.75rem);
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.rec-card__name {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.08;
+  text-align: center;
+  color: var(--rec-cream);
+}
+
+.rec-card__location {
+  margin: 0;
+  font-family: 'Jacques Francois', serif;
+  font-size: clamp(0.85rem, 1.1vw, 1rem);
+  line-height: 1.35;
+  text-align: center;
+  color: rgba(245, 238, 220, 0.82);
+}
+
+.rec-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.rec-card__meta span {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgba(245, 238, 220, 0.55);
+  border-radius: 999px;
+  font-family: 'Jacques Francois', serif;
+  font-size: clamp(0.75rem, 0.95vw, 0.88rem);
+  color: rgba(245, 238, 220, 0.9);
+}
+
+.rec-card__blurb {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(1rem, 1.8vw, 1.875rem);
+  line-height: 1.35;
+  color: var(--rec-cream);
+  text-align: center;
+}
+
+.rec-card__map {
+  align-self: center;
+  margin-top: auto;
+  padding: 0.45rem 0.85rem;
+  border: 2px solid var(--rec-cream);
+  border-radius: 999px;
+  background: rgba(245, 238, 220, 0.16);
+  color: var(--rec-cream);
+  font-family: 'Jacques Francois', serif;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.rec-card__map:hover,
+.rec-card__map:focus-visible {
+  background: rgba(245, 238, 220, 0.3);
+}
+
+.rec-card__tags {
+  list-style: none;
+  margin: clamp(0.55rem, 1.5vw, 0.85rem) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.3rem, 0.9vw, 0.45rem);
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rec-card__tag {
+  margin: 0;
+  padding: 0 clamp(0.45rem, 1vw, 0.75rem);
+  min-height: var(--rec-pill-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--rec-cream);
+  border-radius: 20px;
+  background: var(--rec-cream-soft);
+  font-family: 'Jacques Francois', serif;
+  font-size: var(--rec-pill-fs);
+  line-height: 1.2;
+  color: var(--rec-cream);
+  white-space: nowrap;
+}
+
+.rec-card:focus-within .rec-card__panel {
+  background: var(--rec-cream-mid);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+}
+
+.rec-card:focus-within {
+  --rec-body-fs: clamp(1rem, 1.5vw, 1.25rem);
+  --rec-pill-fs: clamp(0.9rem, 1.15vw, 1.12rem);
+  --rec-pill-h: clamp(2.5rem, 3.4vw, 3rem);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rec-card:hover .rec-card__panel {
+    background: var(--rec-cream-mid);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+  }
+
+  .rec-card:hover {
+    --rec-body-fs: clamp(1rem, 1.5vw, 1.25rem);
+    --rec-pill-fs: clamp(0.9rem, 1.15vw, 1.12rem);
+    --rec-pill-h: clamp(2.5rem, 3.4vw, 3rem);
+  }
+
+  .rec-cards:hover .rec-card:hover {
+    flex: 2.35 1 0;
+    transform: translateY(-2px);
+    z-index: 2;
+  }
+
+  .rec-cards:hover .rec-card:not(:hover) {
+    flex: 0.82 1 0;
+    opacity: 0.9;
+  }
+}
+
+.rec-cards:has(.rec-card:focus-within) .rec-card:focus-within {
+  flex: 2.35 1 0;
+  transform: translateY(-2px);
+  z-index: 2;
+}
+
+.rec-cards:has(.rec-card:focus-within) .rec-card:not(:focus-within) {
+  flex: 0.82 1 0;
+  opacity: 0.9;
+}
+
+@media (max-width: 720px) {
+  .rec-cards {
+    flex-wrap: wrap;
+    min-height: auto;
+  }
+
+  .rec-card {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: min(100%, 240px);
+    min-height: auto;
+  }
+
+  .rec-card__panel {
+    min-height: clamp(11rem, 36vh, 18rem);
+  }
+
+  .rec-cards:hover .rec-card:hover,
+  .rec-cards:hover .rec-card:not(:hover),
+  .rec-cards:has(.rec-card:focus-within) .rec-card:focus-within,
+  .rec-cards:has(.rec-card:focus-within) .rec-card:not(:focus-within) {
+    flex: 1 1 100%;
+    opacity: 1;
+  }
+}

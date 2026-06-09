@@ -1,0 +1,607 @@
+/* Star ratings questionnaire — Figma node 5:2, maroon + cream theme */
+
+.q-stars-page {
+  --q-bg: #3c0000;
+  --q-cream: #f5eedc;
+  --q-cream-soft: rgba(245, 238, 220, 0.2);
+  --q-cream-mid: rgba(245, 238, 220, 0.5);
+
+  display: grid;
+  /* Figma 5:2 — ¼ photo | ½ questionnaire | ¼ photo */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
+  min-height: 100svh;
+  width: 100%;
+  background: var(--q-bg);
+  color: var(--q-cream);
+}
+
+.q-stars__aside {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Portrait crops inside side rails (Figma 21:90 left, 21:92 right) */
+.q-stars__aside-crop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* No positive left offset — that left ~14% empty inside the rail (maroon “buffer”) vs the viewport edge */
+.q-stars__aside-crop--left img {
+  position: absolute;
+  top: 0;
+  left: -3%;
+  display: block;
+  width: 106%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.q-stars__aside-crop--right img {
+  position: absolute;
+  top: -0.01%;
+  left: -35.59%;
+  display: block;
+  width: 199.64%;
+  max-width: none;
+  height: 100.06%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 27:94 — right column hero (31:268) */
+.q-stars__aside-crop--step2-right img {
+  position: absolute;
+  top: 0;
+  left: -27.69%;
+  display: block;
+  width: 135%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 31:277 — price slide side photos (31:312 left, 31:313 right) */
+.q-stars__aside-crop--price-left img {
+  position: absolute;
+  top: 0;
+  left: -110.03%;
+  display: block;
+  width: 259.05%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.q-stars__aside-crop--price-right img {
+  position: absolute;
+  top: -0.01%;
+  left: -150%;
+  display: block;
+  width: 250.18%;
+  max-width: none;
+  height: 100.03%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 35:314 — table service rails (fill column; positive Figma `left` left maroon gaps) */
+.q-stars__aside-crop--table-left img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: 62% center;
+}
+
+.q-stars__aside-crop--table-right img {
+  position: absolute;
+  top: -0.07%;
+  left: -79.68%;
+  display: block;
+  width: 199.66%;
+  max-width: none;
+  height: 100.02%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 35:365 — takeout (same full-bleed left rail as table) */
+.q-stars__aside-crop--takeout-left img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: 58% center;
+}
+
+.q-stars__aside-crop--takeout-right img {
+  position: absolute;
+  top: 0;
+  left: -61.7%;
+  display: block;
+  width: 223.49%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 35:388 — delivery */
+.q-stars__aside-crop--delivery-left img {
+  position: absolute;
+  top: 0;
+  left: -42.64%;
+  display: block;
+  width: 200.36%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.q-stars__aside-crop--delivery-right img {
+  position: absolute;
+  top: 0;
+  left: -43.26%;
+  display: block;
+  width: 186.24%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 35:411 — ambiance */
+.q-stars__aside-crop--ambiance-left img {
+  position: absolute;
+  top: 0;
+  left: -39.55%;
+  display: block;
+  width: 233.71%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.q-stars__aside-crop--ambiance-right img {
+  position: absolute;
+  top: 0;
+  left: -63.87%;
+  display: block;
+  width: 213.7%;
+  max-width: none;
+  height: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+/* Figma 35:314 / 35:365 / 35:388 — Yes / No row labels */
+.q-stars__option-btn--yn {
+  justify-content: flex-start;
+}
+
+.q-stars__option-yn-label {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-size: clamp(1.35rem, 3.8vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.q-stars__main {
+  position: relative;
+  padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1rem, 3vw, 2rem) clamp(1.5rem, 4vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  box-sizing: border-box;
+}
+
+.q-stars__back {
+  align-self: flex-start;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--q-cream);
+  line-height: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+
+.q-stars__back img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.q-stars__back:hover {
+  opacity: 0.88;
+}
+
+.q-stars__back:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.q-stars__title {
+  margin: 0 0 clamp(1.25rem, 3vw, 2rem);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(1.15rem, 2.8vw, 2.5rem);
+  line-height: 1.25;
+  text-align: center;
+  color: var(--q-cream);
+}
+
+.q-stars__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.5vw, 0.85rem);
+}
+
+.q-stars__option {
+  margin: 0;
+}
+
+.q-stars__option-btn {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  min-height: 4.65rem;
+  padding: 0.65rem 1rem 0.65rem 0.85rem;
+  border: 3px solid var(--q-cream);
+  border-radius: 10px;
+  background: var(--q-cream-soft);
+  color: var(--q-cream);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-size: clamp(1.25rem, 3.2vw, 2.5rem);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.q-stars__option-btn[aria-checked='true'] {
+  background: var(--q-cream-mid);
+}
+
+.q-stars__option-btn:hover {
+  background: var(--q-cream-mid);
+}
+
+.q-stars__option-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.q-stars__radio {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 2px solid var(--q-cream);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.q-stars__option-btn[aria-checked='true'] .q-stars__radio::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--q-cream);
+}
+
+/* Figma 31:277 — $ / $$ / $$$ / $$$$ (same left alignment as stars options) */
+.q-stars__option-btn--price-tier {
+  justify-content: flex-start;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-size: clamp(1.35rem, 3.8vw, 2.5rem);
+  letter-spacing: 0.02em;
+}
+
+.q-stars__option-price-label {
+  text-align: left;
+}
+
+.q-stars__dealbreaker {
+  width: 100%;
+  max-width: 34rem;
+  margin-top: clamp(1.75rem, 4vw, 2.75rem);
+}
+
+.q-stars__dealbreaker-heading {
+  margin: 0 0 0.75rem;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  text-align: left;
+  width: 100%;
+  color: var(--q-cream);
+}
+
+.q-stars__slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: stretch;
+}
+
+.q-stars__slider {
+  width: 100%;
+  height: 2rem;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.q-stars__slider:focus {
+  outline: none;
+}
+
+.q-stars__slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.q-stars__slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--q-cream);
+  border: none;
+  border-radius: 1px;
+}
+
+.q-stars__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: calc(0.5px - 0.55rem);
+  border-radius: 50%;
+  background: var(--q-cream);
+  border: 2px solid var(--q-cream);
+  box-sizing: border-box;
+}
+
+.q-stars__slider::-moz-range-track {
+  height: 2px;
+  background: var(--q-cream);
+  border-radius: 1px;
+}
+
+.q-stars__slider::-moz-range-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--q-cream);
+  border: 2px solid var(--q-cream);
+  cursor: pointer;
+}
+
+.q-stars__slider-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(0.85rem, 1.8vw, 1.5rem);
+  line-height: 1.2;
+  color: var(--q-cream);
+}
+
+.q-stars__slider-labels span:first-child {
+  text-align: left;
+  max-width: 9rem;
+}
+
+.q-stars__slider-labels span:last-child {
+  text-align: right;
+  max-width: 8rem;
+}
+
+.q-stars__next {
+  margin-top: clamp(1.75rem, 4vw, 2.75rem);
+  min-width: 12rem;
+  max-width: 12.5rem;
+  width: 100%;
+  padding: 0.45rem 1.25rem;
+  min-height: 2.95rem;
+  border: 3px solid var(--q-cream);
+  border-radius: 1.25rem;
+  background: var(--q-cream-soft);
+  color: var(--q-cream);
+  font-family: 'Jacques Francois', serif;
+  font-size: clamp(1.1rem, 2.2vw, 2rem);
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.q-stars__next:hover {
+  background: var(--q-cream-soft);
+}
+
+.q-stars__next:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.q-stars__banner-error {
+  width: 100%;
+  max-width: 36rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ffb4b4;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.q-stars__missing {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #ffb4b4;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+/* Figma 27:94 — cuisine mood pills (Jacques Francois + plus / check) */
+.q-cuisine__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+  width: 100%;
+  max-width: min(56rem, 100%);
+  margin: 0 auto clamp(0.75rem, 2vw, 1.25rem);
+  padding: 0 0.25rem;
+  box-sizing: border-box;
+}
+
+.q-cuisine__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem 0.35rem 0.85rem;
+  min-height: 3.2rem;
+  border: 3px solid var(--q-cream);
+  border-radius: 1.25rem;
+  background: var(--q-cream-soft);
+  color: var(--q-cream);
+  font-family: 'Jacques Francois', serif;
+  font-size: clamp(0.9rem, 1.9vw, 1.75rem);
+  line-height: 1.15;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.q-cuisine__pill[aria-pressed='true'] {
+  background: var(--q-cream-mid);
+}
+
+.q-cuisine__pill:hover {
+  background: var(--q-cream-mid);
+}
+
+.q-cuisine__pill:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.q-cuisine__pill-label {
+  text-align: center;
+}
+
+.q-cuisine__pill-icon {
+  flex-shrink: 0;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.q-cuisine__pill-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .q-stars-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(18vh, 140px) auto minmax(18vh, 140px);
+  }
+
+  .q-stars__aside--left {
+    grid-row: 1;
+    min-height: min(24vh, 180px);
+  }
+
+  .q-stars__main {
+    grid-row: 2;
+  }
+
+  .q-stars__aside--right {
+    grid-row: 3;
+    min-height: min(24vh, 180px);
+  }
+
+  .q-stars__aside-crop--left img,
+  .q-stars__aside-crop--right img,
+  .q-stars__aside-crop--step2-right img,
+  .q-stars__aside-crop--price-left img,
+  .q-stars__aside-crop--price-right img,
+  .q-stars__aside-crop--table-left img,
+  .q-stars__aside-crop--table-right img,
+  .q-stars__aside-crop--takeout-left img,
+  .q-stars__aside-crop--takeout-right img,
+  .q-stars__aside-crop--delivery-left img,
+  .q-stars__aside-crop--delivery-right img,
+  .q-stars__aside-crop--ambiance-left img,
+  .q-stars__aside-crop--ambiance-right img {
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    object-position: center center;
+  }
+}

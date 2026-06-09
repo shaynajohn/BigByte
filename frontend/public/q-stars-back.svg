@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 46 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Back button">
+<rect id="Rectangle 7" x="0.5" y="0.5" width="45" height="45" rx="4.5" stroke="var(--stroke-0, #F5EEDC)"/>
+<path id="Arrow 1" d="M7.43161 21.5855C6.84582 22.1713 6.84582 23.121 7.43161 23.7068L16.9775 33.2528C17.5633 33.8385 18.5131 33.8385 19.0989 33.2528C19.6847 32.667 19.6847 31.7172 19.0989 31.1314L10.6136 22.6462L19.0989 14.1609C19.6847 13.5751 19.6847 12.6253 19.0989 12.0396C18.5131 11.4538 17.5633 11.4538 16.9775 12.0396L7.43161 21.5855ZM38.2153 22.6462V21.1462L8.49227 21.1462V22.6462V24.1462L38.2153 24.1462V22.6462Z" fill="var(--stroke-0, #F5EEDC)"/>
+</g>
+</svg>
