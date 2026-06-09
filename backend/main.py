@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .demo_catalog import DEMO_SAN_FRANCISCO_FOOD_SPOTS
@@ -20,6 +23,8 @@ from .recommender_rules import (
 )
 
 app = FastAPI(title="BigByte")
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+FRONTEND_INDEX = FRONTEND_DIST / "index.html"
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,9 +163,16 @@ class SessionRecommendRequest(BaseModel):
     fairness_alpha: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
-@app.get("/")
-def read_root() -> dict[str, str]:
+@app.get("/", response_model=None)
+def read_root():
+    if FRONTEND_INDEX.exists():
+        return FileResponse(FRONTEND_INDEX)
     return {"app": "BigByte", "mode": "temporary in-memory groups"}
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"ok": "true"}
 
 
 @app.post("/api/groups")
@@ -375,3 +387,7 @@ def recommend(payload: RecommendRequest) -> dict[str, Any]:
         "candidates_after_rules": len(filtered),
         "top_3": [recommendation_payload(t) for t in filtered[:3]],
     }
+
+
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

@@ -38,6 +38,28 @@ Open:
 http://localhost:5173
 ```
 
+## Deploy
+
+This repo is configured to deploy as one Docker web service. The FastAPI backend serves
+the built React app from `frontend/dist`, so the deployed app has one public URL that
+works on desktop and mobile browsers.
+
+Render:
+
+1. Push this repo to GitHub.
+2. In Render, choose **New** → **Blueprint** and select this repository.
+3. Render will read `render.yaml`, build the Docker image, and run:
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+```
+
+After deploy, open the Render URL on your phone. Use **Share** → **Add to Home Screen**
+on iPhone, or **Install app** / **Add to Home screen** on Android.
+
+Note: groups are currently stored in backend memory. Restarting or redeploying the server
+clears active groups.
+
 ## Data Behavior
 
 - No Supabase required.
