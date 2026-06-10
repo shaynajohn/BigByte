@@ -61,6 +61,11 @@ function buildMapUrl(r) {
     : null
 }
 
+function buildSearchUrl(r, intent) {
+  const query = [r.name, r.address, r.city, intent].filter(Boolean).join(' ')
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`
+}
+
 function buildImageUrl(r) {
   if (r.image_url) return r.image_url
   const haystack = `${r.name || ''} ${r.categories || ''}`
@@ -68,42 +73,22 @@ function buildImageUrl(r) {
   return hit?.url || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80'
 }
 
-function buildBlurb(r) {
-  const parts = []
-  if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
-    parts.push(`Group match is ${Math.round(Number(r.group_score) * 100)}%.`)
-  }
-  if (typeof r.avg_utility === 'number' && !Number.isNaN(r.avg_utility)) {
-    parts.push(`Average preference fit is ${Math.round(Number(r.avg_utility) * 100)}%.`)
-  }
-  if (typeof r.cuisine_group_fit === 'number' && !Number.isNaN(r.cuisine_group_fit)) {
-    parts.push(
-      `Cuisine fit for the group is about ${Math.round(Number(r.cuisine_group_fit) * 100)}%.`,
-    )
-  }
-  if (r.score != null) {
-    parts.push(`Rank score ${typeof r.score === 'number' ? r.score.toFixed(2) : r.score}.`)
-  }
-  if (parts.length) return parts.join(' ')
-  return 'Each pick reflects how the food spot lines up with what your group said matters: flavors, budget, distance, and vibe.'
-}
-
 function buildReasons(r) {
   const reasons = []
-  if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
-    reasons.push(`${Math.round(Number(r.group_score) * 100)}% group match`)
+  if (typeof r.category_fit === 'number' && r.category_fit >= 0.99) {
+    reasons.push('Matches selected food types')
   }
   if (r.relaxed_dealbreaker_fallback) {
-    reasons.push('Best compromise when preferences conflict')
+    reasons.push('Closest compromise')
+  }
+  if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
+    reasons.push(`${Math.round(Number(r.group_score) * 100)}% match`)
   }
   if (r.price_range != null) {
-    reasons.push(`${formatPriceLevel(r.price_range)} budget fit`)
+    reasons.push(formatPriceLevel(r.price_range))
   }
-  if (r.takeout) reasons.push('Takeout works')
-  if (r.delivery) reasons.push('Delivery available')
   if (r.good_for_groups) reasons.push('Group-friendly')
-  if (r.table_service) reasons.push('Table service')
-  return reasons.slice(0, 4)
+  return reasons.slice(0, 3)
 }
 
 function buildTags(r) {
@@ -123,14 +108,8 @@ function buildTags(r) {
 
 function buildMeta(r) {
   const meta = []
-  if (r.distance_miles != null && !Number.isNaN(Number(r.distance_miles))) {
-    meta.push(`${Number(r.distance_miles).toFixed(1)} mi`)
-  }
   if (r.review_count != null) {
     meta.push(`${Number(r.review_count).toLocaleString()} reviews`)
-  }
-  if (r.price_range != null) {
-    meta.push(formatPriceLevel(r.price_range))
   }
   return meta.filter(Boolean)
 }
@@ -141,9 +120,10 @@ function normalizeFromApi(rows) {
     name: r.name?.trim() || 'Food spot',
     location: buildLocationLine(r),
     mapUrl: buildMapUrl(r),
+    reservationUrl: buildSearchUrl(r, 'reservation'),
+    menuUrl: buildSearchUrl(r, 'menu'),
     imageUrl: buildImageUrl(r),
     imageAlt: `${r.name?.trim() || 'Food spot'} preview`,
-    blurb: buildBlurb(r),
     reasons: buildReasons(r),
     meta: buildMeta(r),
     tags: buildTags(r),
@@ -267,6 +247,11 @@ export function RecommendationsPage({
     }
     return best
   }, [picks, votesData])
+  const finalWinner = useMemo(() => {
+    const winnerId = votesData.winner?.restaurant_id
+    return picks.find((row) => row.id === winnerId) || null
+  }, [picks, votesData])
+  const winnerPick = finalWinner || leadingPick
 
   async function voteFor(restaurantId, vote) {
     if (!groupId || !actorId) return
@@ -294,6 +279,32 @@ export function RecommendationsPage({
     }
   }
 
+  async function finalizeWinner(restaurantId) {
+    if (!groupId || !actorId) return
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/winner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor_id: actorId, restaurant_id: restaurantId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Could not choose winner.')
+      setVotesData(data)
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not choose winner.')
+    }
+  }
+
+  async function sharePick(pick) {
+    const text = `BigByte picked ${pick.name}${pick.location ? ` at ${pick.location}` : ''}. ${pick.mapUrl || ''}`
+    if (navigator.share) {
+      await navigator.share({ title: `BigByte picked ${pick.name}`, text, url: pick.mapUrl || window.location.href })
+      return
+    }
+    await navigator.clipboard?.writeText(text)
+    setNote('Copied the winning pick to your clipboard.')
+  }
+
   if (!groupExists) {
     return (
       <div className="rec-page">
@@ -314,28 +325,63 @@ export function RecommendationsPage({
   }
 
   return (
-    <div className="rec-page">
+    <div className={`rec-page ${finalWinner ? 'rec-page--winner' : ''}`}>
       <header className="rec-page__header">
         <p className="rec-page__brand">BigByte</p>
-        <h1 className="rec-page__title">Your Group&apos;s Top Picks</h1>
+        <h1 className="rec-page__title">
+          {finalWinner ? 'Your Group Picked' : 'Vote On Your Top Picks'}
+        </h1>
       </header>
 
       <div className="rec-page__stretch">
         {loading ? <p className="rec-page__status">Loading recommendations…</p> : null}
         {!loading && note ? <p className="rec-page__status">{note}</p> : null}
-        {!loading && picks.length ? (
+        {!loading && finalWinner ? (
+          <section className="rec-winner" aria-label="Final group pick">
+            <div className="rec-winner__image-wrap">
+              <img className="rec-winner__image" src={finalWinner.imageUrl} alt={finalWinner.imageAlt} />
+            </div>
+            <div className="rec-winner__body">
+              <p className="rec-consensus__eyebrow">Final pick</p>
+              <h2 className="rec-winner__title">{finalWinner.name}</h2>
+              {finalWinner.location ? <p className="rec-winner__location">{finalWinner.location}</p> : null}
+              {finalWinner.reasons.length ? (
+                <ul className="rec-card__reasons" aria-label={`Why ${finalWinner.name} won`}>
+                  {finalWinner.reasons.slice(0, 2).map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="rec-winner-actions">
+                <a href={finalWinner.mapUrl} target="_blank" rel="noreferrer">
+                  Maps
+                </a>
+                <a href={finalWinner.reservationUrl} target="_blank" rel="noreferrer">
+                  Reservation
+                </a>
+                <a href={finalWinner.menuUrl} target="_blank" rel="noreferrer">
+                  Menu
+                </a>
+                <button type="button" onClick={() => sharePick(finalWinner)}>
+                  Share
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+        {!loading && picks.length && !finalWinner ? (
           <section className="rec-consensus" aria-label="Group voting status">
             <p className="rec-consensus__eyebrow">Consensus round</p>
             <h2 className="rec-consensus__title">
-              {leadingPick ? `${leadingPick.name} is leading` : 'Vote on your favorites'}
+              {leadingPick ? `${leadingPick.name} is leading` : 'Pick your favorite'}
             </h2>
             <p className="rec-consensus__copy">
-              Tap Love, Maybe, or Pass on each card. Counts update for the whole group.
+              Vote on the cards. When the group agrees, choose the leading pick.
             </p>
           </section>
         ) : null}
 
-        <div className="rec-cards" aria-busy={loading}>
+        {!finalWinner ? <div className="rec-cards" aria-busy={loading}>
           {picks.map((r) => (
             <article key={r.id} className="rec-card" tabIndex={0}>
               {(() => {
@@ -356,7 +402,6 @@ export function RecommendationsPage({
                       ))}
                     </div>
                   ) : null}
-                  <p className="rec-card__blurb">{r.blurb}</p>
                   {r.reasons.length ? (
                     <ul className="rec-card__reasons" aria-label={`Why ${r.name} fits`}>
                       {r.reasons.map((reason) => (
@@ -388,31 +433,22 @@ export function RecommendationsPage({
                       </p>
                     </div>
                   ) : null}
-                  {r.mapUrl ? (
-                    <a
-                      className="rec-card__map"
-                      href={r.mapUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open in Maps
-                    </a>
-                  ) : null}
                 </div>
               </div>
                 )
               })()}
-              <ul className="rec-card__tags" aria-label="Highlights">
-                {r.tags.map((t) => (
-                  <li key={t.id} className="rec-card__tag">
-                    {t.label}
-                  </li>
-                ))}
-              </ul>
             </article>
           ))}
-        </div>
+        </div> : null}
       </div>
+
+      {!finalWinner && winnerPick ? (
+        <div className="rec-sticky-pick">
+          <button type="button" onClick={() => finalizeWinner(winnerPick.id)}>
+            Choose leading pick: {winnerPick.name}
+          </button>
+        </div>
+      ) : null}
 
       <div className="rec-page__footer">
         <button type="button" className="rec-page__retry" onClick={onStartNewGroup}>

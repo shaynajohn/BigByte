@@ -93,6 +93,7 @@ def recommendation_payload(row: dict[str, Any]) -> dict[str, Any]:
         "group_score": row.get("_group_score"),
         "avg_utility": row.get("_avg_utility"),
         "min_utility": row.get("_min_utility"),
+        "category_fit": row.get("_category_fit"),
         "cuisine_group_fit": row.get("_cuisine_fraction"),
         "distance_miles": row.get("_distance_miles"),
         "stars": row.get("stars"),
@@ -163,6 +164,11 @@ class SaveVoteRequest(BaseModel):
     vote: Literal["love", "maybe", "pass"]
 
 
+class SetWinnerRequest(BaseModel):
+    actor_id: str = Field(min_length=1, max_length=200)
+    restaurant_id: str = Field(min_length=1, max_length=200)
+
+
 class SessionRecommendRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
@@ -199,6 +205,7 @@ def create_group(payload: CreateGroupRequest) -> dict[str, Any]:
         ],
         "answers": {},
         "votes": {},
+        "winner": None,
     }
     return GROUPS[group_id]
 
@@ -300,6 +307,7 @@ def get_group_votes(group_id: str) -> dict[str, Any]:
         "votes": votes,
         "counts": counts,
         "member_count": len(group.get("members", []) or []),
+        "winner": group.get("winner"),
     }
 
 
@@ -318,6 +326,26 @@ def save_group_vote(group_id: str, payload: SaveVoteRequest) -> dict[str, Any]:
     group.setdefault("votes", {}).setdefault(payload.actor_id, {})[
         payload.restaurant_id
     ] = payload.vote
+    return get_group_votes(group_id)
+
+
+@app.post("/api/groups/{group_id}/winner")
+def set_group_winner(group_id: str, payload: SetWinnerRequest) -> dict[str, Any]:
+    group = GROUPS.get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+    member_actor_ids = {
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    }
+    if member_actor_ids and payload.actor_id not in member_actor_ids:
+        raise HTTPException(status_code=400, detail="Actor is not a member of this group.")
+    group["winner"] = {
+        "restaurant_id": payload.restaurant_id,
+        "selected_by_actor_id": payload.actor_id,
+        "selected_at": now_iso(),
+    }
     return get_group_votes(group_id)
 
 

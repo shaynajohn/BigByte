@@ -406,6 +406,7 @@ def score_group_by_feature_importance(
     soft_scored: list[dict[str, Any]] = []
     for r in restaurants:
         member_utils: list[float] = []
+        category_utils: list[float] = []
         dealbreaker_failed = False
         per_member: list[dict[str, Any]] = []
 
@@ -415,6 +416,9 @@ def score_group_by_feature_importance(
             per_member.append({"utility": u, "feature_satisfaction": contrib})
 
             feats = (m.get("features") or {}) if isinstance(m, dict) else {}
+            category_pref = feats.get("categories") or {}
+            if category_pref.get("value"):
+                category_utils.append(float(contrib.get("categories", 0.0)))
             # Enforce only actual dealbreakers; relaxed slider values rank but do not reject.
             for fname, fobj in feats.items():
                 if not isinstance(fobj, dict):
@@ -444,6 +448,7 @@ def score_group_by_feature_importance(
         rr["_avg_utility"] = avg_u
         rr["_min_utility"] = min_u
         rr["_group_score"] = group_score
+        rr["_category_fit"] = sum(category_utils) / len(category_utils) if category_utils else 1.0
         rr["_member_debug"] = per_member
         if dealbreaker_failed:
             rr["_relaxed_dealbreaker_fallback"] = True
@@ -451,8 +456,20 @@ def score_group_by_feature_importance(
         else:
             scored.append(rr)
 
-    scored.sort(key=lambda x: float(x.get("_group_score") or 0.0), reverse=True)
-    soft_scored.sort(key=lambda x: float(x.get("_group_score") or 0.0), reverse=True)
+    scored.sort(
+        key=lambda x: (
+            float(x.get("_category_fit") or 0.0),
+            float(x.get("_group_score") or 0.0),
+        ),
+        reverse=True,
+    )
+    soft_scored.sort(
+        key=lambda x: (
+            float(x.get("_category_fit") or 0.0),
+            float(x.get("_group_score") or 0.0),
+        ),
+        reverse=True,
+    )
     if scored:
         seen_ids = {row.get("id") for row in scored}
         fallback = [row for row in soft_scored if row.get("id") not in seen_ids]
