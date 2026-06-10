@@ -831,6 +831,7 @@ function App() {
             <RecommendationsPage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
+              actorId={actorId}
               memberActorIds={questionnaireMemberActorIds}
               groupFeaturePreferences={groupFeaturePreferences}
               latitude={parseFloat(groupLatInput)}

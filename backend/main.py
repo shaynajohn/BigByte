@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -104,6 +104,7 @@ def recommendation_payload(row: dict[str, Any]) -> dict[str, Any]:
         "good_for_groups": row.get("good_for_groups"),
         "ambiance_labels": row.get("ambiance_labels"),
         "categories": row.get("categories"),
+        "relaxed_dealbreaker_fallback": row.get("_relaxed_dealbreaker_fallback", False),
     }
 
 
@@ -156,6 +157,12 @@ class SaveAnswersRequest(BaseModel):
     features: dict[str, FeaturePref] = Field(default_factory=dict)
 
 
+class SaveVoteRequest(BaseModel):
+    actor_id: str = Field(min_length=1, max_length=200)
+    restaurant_id: str = Field(min_length=1, max_length=200)
+    vote: Literal["love", "maybe", "pass"]
+
+
 class SessionRecommendRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
@@ -191,6 +198,7 @@ def create_group(payload: CreateGroupRequest) -> dict[str, Any]:
             }
         ],
         "answers": {},
+        "votes": {},
     }
     return GROUPS[group_id]
 
@@ -267,6 +275,50 @@ def save_group_answers(group_id: str, payload: SaveAnswersRequest) -> dict[str, 
         "member_count": len(member_actor_ids),
         "ready_for_recommendations": bool(member_actor_ids) and completed_count >= len(member_actor_ids),
     }
+
+
+@app.get("/api/groups/{group_id}/votes")
+def get_group_votes(group_id: str) -> dict[str, Any]:
+    group = GROUPS.get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+    votes = group.get("votes") or {}
+    counts: dict[str, dict[str, int]] = {}
+    for actor_votes in votes.values():
+        if not isinstance(actor_votes, dict):
+            continue
+        for restaurant_id, vote in actor_votes.items():
+            if vote not in {"love", "maybe", "pass"}:
+                continue
+            row = counts.setdefault(
+                str(restaurant_id),
+                {"love": 0, "maybe": 0, "pass": 0, "total": 0},
+            )
+            row[str(vote)] += 1
+            row["total"] += 1
+    return {
+        "votes": votes,
+        "counts": counts,
+        "member_count": len(group.get("members", []) or []),
+    }
+
+
+@app.post("/api/groups/{group_id}/votes")
+def save_group_vote(group_id: str, payload: SaveVoteRequest) -> dict[str, Any]:
+    group = GROUPS.get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+    member_actor_ids = {
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    }
+    if member_actor_ids and payload.actor_id not in member_actor_ids:
+        raise HTTPException(status_code=400, detail="Actor is not a member of this group.")
+    group.setdefault("votes", {}).setdefault(payload.actor_id, {})[
+        payload.restaurant_id
+    ] = payload.vote
+    return get_group_votes(group_id)
 
 
 @app.post("/api/groups/{group_id}/recommendations")

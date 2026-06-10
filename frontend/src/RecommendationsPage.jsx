@@ -88,6 +88,24 @@ function buildBlurb(r) {
   return 'Each pick reflects how the food spot lines up with what your group said matters: flavors, budget, distance, and vibe.'
 }
 
+function buildReasons(r) {
+  const reasons = []
+  if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
+    reasons.push(`${Math.round(Number(r.group_score) * 100)}% group match`)
+  }
+  if (r.relaxed_dealbreaker_fallback) {
+    reasons.push('Best compromise when preferences conflict')
+  }
+  if (r.price_range != null) {
+    reasons.push(`${formatPriceLevel(r.price_range)} budget fit`)
+  }
+  if (r.takeout) reasons.push('Takeout works')
+  if (r.delivery) reasons.push('Delivery available')
+  if (r.good_for_groups) reasons.push('Group-friendly')
+  if (r.table_service) reasons.push('Table service')
+  return reasons.slice(0, 4)
+}
+
 function buildTags(r) {
   const tags = []
   tags.push({ id: 'vibe', label: pickAmbianceLabel(r.ambiance_labels) })
@@ -126,9 +144,14 @@ function normalizeFromApi(rows) {
     imageUrl: buildImageUrl(r),
     imageAlt: `${r.name?.trim() || 'Food spot'} preview`,
     blurb: buildBlurb(r),
+    reasons: buildReasons(r),
     meta: buildMeta(r),
     tags: buildTags(r),
   }))
+}
+
+function emptyCounts() {
+  return { love: 0, maybe: 0, pass: 0, total: 0 }
 }
 
 /**
@@ -137,6 +160,7 @@ function normalizeFromApi(rows) {
 export function RecommendationsPage({
   groupId,
   groupExists,
+  actorId,
   memberActorIds,
   groupFeaturePreferences,
   latitude,
@@ -146,6 +170,7 @@ export function RecommendationsPage({
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
   const [note, setNote] = useState('')
+  const [votesData, setVotesData] = useState({ votes: {}, counts: {}, member_count: 0 })
 
   const lat = latitude
   const lng = longitude
@@ -207,6 +232,11 @@ export function RecommendationsPage({
       const note = data.note && !data.note.includes('Nothing is saved') ? data.note : ''
       setNote(note || (top.length ? '' : 'No matching San Francisco food spots yet. Try relaxing the group preferences.'))
       setRows(top)
+      if (groupId) {
+        const voteRes = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/votes`)
+        const voteData = await voteRes.json().catch(() => ({}))
+        if (voteRes.ok) setVotesData(voteData)
+      }
     } catch (e) {
       setNote(e instanceof Error ? e.message : 'Could not load recommendations.')
       setRows([])
@@ -224,6 +254,45 @@ export function RecommendationsPage({
   }, [groupExists, load])
 
   const picks = useMemo(() => rows, [rows])
+  const leadingPick = useMemo(() => {
+    let best = null
+    let bestScore = -1
+    for (const row of picks) {
+      const counts = votesData.counts?.[row.id] || emptyCounts()
+      const score = (counts.love || 0) * 2 + (counts.maybe || 0) - (counts.pass || 0)
+      if (score > bestScore && (counts.total || 0) > 0) {
+        best = row
+        bestScore = score
+      }
+    }
+    return best
+  }, [picks, votesData])
+
+  async function voteFor(restaurantId, vote) {
+    if (!groupId || !actorId) return
+    setVotesData((prev) => ({
+      ...prev,
+      votes: {
+        ...(prev.votes || {}),
+        [actorId]: {
+          ...((prev.votes || {})[actorId] || {}),
+          [restaurantId]: vote,
+        },
+      },
+    }))
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actor_id: actorId, restaurant_id: restaurantId, vote }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Vote failed.')
+      setVotesData(data)
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Could not save vote.')
+    }
+  }
 
   if (!groupExists) {
     return (
@@ -254,10 +323,25 @@ export function RecommendationsPage({
       <div className="rec-page__stretch">
         {loading ? <p className="rec-page__status">Loading recommendations…</p> : null}
         {!loading && note ? <p className="rec-page__status">{note}</p> : null}
+        {!loading && picks.length ? (
+          <section className="rec-consensus" aria-label="Group voting status">
+            <p className="rec-consensus__eyebrow">Consensus round</p>
+            <h2 className="rec-consensus__title">
+              {leadingPick ? `${leadingPick.name} is leading` : 'Vote on your favorites'}
+            </h2>
+            <p className="rec-consensus__copy">
+              Tap Love, Maybe, or Pass on each card. Counts update for the whole group.
+            </p>
+          </section>
+        ) : null}
 
         <div className="rec-cards" aria-busy={loading}>
           {picks.map((r) => (
             <article key={r.id} className="rec-card" tabIndex={0}>
+              {(() => {
+                const counts = votesData.counts?.[r.id] || emptyCounts()
+                const myVote = votesData.votes?.[actorId]?.[r.id] || ''
+                return (
               <div className="rec-card__panel">
                 <div className="rec-card__image-wrap">
                   <img className="rec-card__image" src={r.imageUrl} alt={r.imageAlt} loading="lazy" />
@@ -273,6 +357,37 @@ export function RecommendationsPage({
                     </div>
                   ) : null}
                   <p className="rec-card__blurb">{r.blurb}</p>
+                  {r.reasons.length ? (
+                    <ul className="rec-card__reasons" aria-label={`Why ${r.name} fits`}>
+                      {r.reasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {groupId ? (
+                    <div className="rec-vote" aria-label={`Vote on ${r.name}`}>
+                      <div className="rec-vote__buttons">
+                        {[
+                          ['love', 'Love'],
+                          ['maybe', 'Maybe'],
+                          ['pass', 'Pass'],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            className="rec-vote__btn"
+                            aria-pressed={myVote === value}
+                            onClick={() => voteFor(r.id, value)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="rec-vote__counts">
+                        {counts.love || 0} love · {counts.maybe || 0} maybe · {counts.pass || 0} pass
+                      </p>
+                    </div>
+                  ) : null}
                   {r.mapUrl ? (
                     <a
                       className="rec-card__map"
@@ -285,6 +400,8 @@ export function RecommendationsPage({
                   ) : null}
                 </div>
               </div>
+                )
+              })()}
               <ul className="rec-card__tags" aria-label="Highlights">
                 {r.tags.map((t) => (
                   <li key={t.id} className="rec-card__tag">
