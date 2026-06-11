@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Tacos">
+  <rect width="160" height="160" rx="22" fill="#7f1d1d"/>
+  <circle cx="36" cy="30" r="45" fill="#fb923c" opacity=".58"/>
+  <path d="M32 98c10-38 86-38 96 0H32Z" fill="#ffd166" stroke="#70351e" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M43 91c8-19 65-20 75 0" fill="#8fbf4d"/>
+  <circle cx="60" cy="78" r="7" fill="#dc2626"/>
+  <circle cx="83" cy="73" r="6" fill="#dc2626"/>
+  <circle cx="103" cy="80" r="7" fill="#dc2626"/>
+  <path d="M52 96c15 14 42 15 59 1" fill="none" stroke="#fef3c7" stroke-width="9" stroke-linecap="round"/>
+  <path d="M41 115h78" stroke="#f5eedc" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+</svg>

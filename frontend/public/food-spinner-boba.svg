@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Boba">
+  <rect width="160" height="160" rx="22" fill="#6b3f2a"/>
+  <circle cx="126" cy="35" r="44" fill="#f6c177" opacity=".55"/>
+  <path d="M50 48h60l-8 83H58L50 48Z" fill="#f5c58b" stroke="#3b1d12" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M48 62h64" stroke="#3b1d12" stroke-width="7" stroke-linecap="round"/>
+  <path d="M100 28 86 91" stroke="#f5eedc" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="68" cy="111" r="7" fill="#2a1712"/>
+  <circle cx="84" cy="119" r="7" fill="#2a1712"/>
+  <circle cx="97" cy="108" r="7" fill="#2a1712"/>
+  <path d="M59 78c15 7 31 7 46 0" fill="none" stroke="#fff1c7" stroke-width="6" stroke-linecap="round" opacity=".78"/>
+</svg>

@@ -6,6 +6,7 @@ import { QuestionnaireStarsPage } from './QuestionnaireStarsPage.jsx'
 import { QuestionnaireStep2Page } from './QuestionnaireStep2Page.jsx'
 import { QuestionnairePricePage } from './QuestionnairePricePage.jsx'
 import { QuestionnaireBooleanStepPage } from './QuestionnaireBooleanStep.jsx'
+import { QuestionnaireCommutePage } from './QuestionnaireCommutePage.jsx'
 import { QuestionnaireAmbiancePage } from './QuestionnaireAmbiancePage.jsx'
 import { QuestionnaireWaitingPage } from './QuestionnaireWaitingPage.jsx'
 import { RecommendationsPage } from './RecommendationsPage.jsx'
@@ -344,12 +345,12 @@ function App() {
               features: sessionFeatures,
             },
           ],
-          limit: 200,
+          limit: 300,
           fairness_alpha: 0.7,
         }
       : {
           actor_id: actorId,
-          limit: 200,
+          limit: 300,
         }
     if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
       body.latitude = lat
@@ -387,7 +388,7 @@ function App() {
     const lat = parseFloat(groupLatInput)
     const lng = parseFloat(groupLngInput)
     const body = {
-      limit: 200,
+      limit: 300,
       fairness_alpha: 0.7,
     }
     if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
@@ -505,10 +506,10 @@ function App() {
     routeKey === 'questionnaire' && groupIdFromRoute && parts[2] === 'results'
   const questionnaireStep =
     routeKey === 'questionnaire' && groupIdFromRoute
-      ? ['2', '3', '4', '5', '6', '7'].includes(parts[2])
+      ? ['commute', 'stars', '2', '3', '4', '5', '6', '8'].includes(parts[2])
         ? parts[2]
-        : 'stars'
-      : 'stars'
+        : 'commute'
+      : 'commute'
   const currentGroup = groupIdFromRoute ? loadGroups()[groupIdFromRoute] || null : null
 
   useEffect(() => {
@@ -841,7 +842,21 @@ function App() {
                 navigate('/')
               }}
             />
-          ) : questionnaireStep === '7' ? (
+          ) : questionnaireStep === 'commute' ? (
+            <QuestionnaireCommutePage
+              groupId={groupIdFromRoute}
+              groupExists={!!currentGroup}
+              actorId={actorId}
+              onBack={() => {
+                setError('')
+                navigate('/')
+              }}
+              onComplete={() => {
+                setError('')
+                navigate(`/questionnaire/${groupIdFromRoute}/stars`)
+              }}
+            />
+          ) : questionnaireStep === '8' ? (
             <QuestionnaireAmbiancePage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
@@ -870,7 +885,7 @@ function App() {
               }}
               onComplete={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/7`)
+                navigate(`/questionnaire/${groupIdFromRoute}/8`)
               }}
             />
           ) : questionnaireStep === '5' ? (
@@ -926,7 +941,7 @@ function App() {
               actorId={actorId}
               onBack={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}`)
+                navigate(`/questionnaire/${groupIdFromRoute}/stars`)
               }}
               onNext={() => {
                 setError('')
@@ -940,7 +955,7 @@ function App() {
               actorId={actorId}
               onBack={() => {
                 setError('')
-                navigate('/')
+                navigate(`/questionnaire/${groupIdFromRoute}`)
               }}
               onComplete={() => {
                 setError('')
@@ -1095,13 +1110,13 @@ function App() {
                   )}
                 </ul>
                 <p className="kahoot-hint" style={{ marginTop: 16 }}>
-                  Share the invite code or link, then have each person complete the flow. Use the
-                  meeting point below for distance filtering.
+                  Share the invite code or link, then have each person complete the flow.
+                  Commute is based on each member&apos;s location and preferred mode.
                 </p>
                 <MeetingPointControls
                   idPrefix="grp"
-                  title={`${SAN_FRANCISCO_MEETING_POINT.label} group spot`}
-                  hint={`Start from ${SAN_FRANCISCO_MEETING_POINT.anchor}, or use the host's current location as the meetup point.`}
+                  title="Optional fallback meeting point"
+                  hint="Used only for the older straight-line distance fallback. The results page uses each member's commute answers."
                   latitude={groupLatInput}
                   longitude={groupLngInput}
                   onLatitudeChange={setGroupLatInput}
@@ -1159,6 +1174,9 @@ function App() {
                               : ''}
                             {r.distance_miles != null
                               ? ` · ${Number(r.distance_miles).toFixed(2)} mi`
+                              : ''}
+                            {r.commute_summary?.avg_preferred_minutes != null
+                              ? ` · avg commute ${Math.round(Number(r.commute_summary.avg_preferred_minutes))} min`
                               : ''}
                             {r.stars != null ? ` · ★${r.stars}` : ''}
                           </span>

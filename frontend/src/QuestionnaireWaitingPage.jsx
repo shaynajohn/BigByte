@@ -1,22 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { markQuestionnaireFlowComplete } from './questionnaireStorage.js'
 import './questionnaire-waiting.css'
 
 const API_BASE =
   import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
-/** Figma 43:518 — five photos on the orbit. */
 const WAITING_ORBIT_SLOTS = [
-  { nodeId: '43:567', src: '/waiting-rotation-1.png', w: 721, h: 1023 },
-  { nodeId: '43:568', src: '/waiting-rotation-2.png', w: 666, h: 1000 },
-  { nodeId: '43:569', src: '/waiting-rotation-3.png', w: 736, h: 920 },
-  { nodeId: '43:570', src: '/waiting-rotation-4.png', w: 1200, h: 1600 },
-  { nodeId: '43:571', src: '/waiting-rotation-5.png', w: 736, h: 1104 },
+  { id: 'pizza', label: 'Pizza', src: '/food-spinner-pizza.svg' },
+  { id: 'thai', label: 'Thai', src: '/food-spinner-thai.svg' },
+  { id: 'sushi', label: 'Sushi', src: '/food-spinner-sushi.svg' },
+  { id: 'tacos', label: 'Tacos', src: '/food-spinner-tacos.svg' },
+  { id: 'boba', label: 'Boba', src: '/food-spinner-boba.svg' },
 ]
 
 /**
  * Figma 43:518 — copy in `.q-wait-page__copy` matches the frame text only; chrome lives outside.
- * Polls group completion; "Next" appears once every backend member has submitted answers.
+ * Polls group completion and continues automatically once every member has submitted answers.
  */
 export function QuestionnaireWaitingPage({
   groupId,
@@ -31,6 +30,11 @@ export function QuestionnaireWaitingPage({
     completed: 0,
     total: (memberActorIds || []).filter(Boolean).length,
   })
+  const continueRef = useRef(onContinueToResults)
+
+  useEffect(() => {
+    continueRef.current = onContinueToResults
+  }, [onContinueToResults])
 
   useEffect(() => {
     markQuestionnaireFlowComplete(groupId, actorId)
@@ -50,8 +54,15 @@ export function QuestionnaireWaitingPage({
         if (!res.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Group not found.')
         const completed = Number(data.completed_count || 0)
         const total = Number(data.member_count || (memberActorIds || []).filter(Boolean).length || 0)
+        const ready = data.ready_for_recommendations || (total > 0 && completed >= total)
         setProgress({ completed, total })
-        setPhase(data.ready_for_recommendations || (total > 0 && completed >= total) ? 'ready' : 'waiting')
+        setPhase(ready ? 'ready' : 'waiting')
+        if (ready) {
+          window.setTimeout(() => {
+            if (!cancelled) continueRef.current()
+          }, 250)
+          return
+        }
       } catch {
         if (!cancelled) setPhase('waiting')
       }
@@ -91,38 +102,28 @@ export function QuestionnaireWaitingPage({
         <div className="q-wait-page__copy">
           <p className="q-wait-page__brand">BigByte</p>
           <h1 className="q-wait-page__headline">
-            Collecting group preferences and finding the perfect San Francisco food spot…
+            {phase === 'ready'
+              ? 'Building your final picks.'
+              : 'Waiting for everyone, then finding your SF food match.'}
           </h1>
-          {phase === 'loading' || phase === 'waiting' ? (
-            <p className="q-wait-page__status" aria-live="polite">
-              {progress.total
+          <p className="q-wait-page__status" aria-live="polite">
+            {phase === 'ready'
+              ? 'Almost there...'
+              : progress.total
                 ? `${progress.completed} of ${progress.total} members have submitted preferences.`
                 : 'Waiting for group members to submit preferences.'}
-            </p>
-          ) : null}
-          <div className="q-wait-page__actions">
-            {phase === 'ready' ? (
-              <button type="button" className="q-wait-page__btn q-wait-page__btn--primary" onClick={onContinueToResults}>
-                Next
-              </button>
-            ) : null}
-          </div>
+          </p>
         </div>
       </div>
-
       <div className="q-wait__stage" aria-hidden="true">
         <div className="q-wait__stage-inner">
           <div className="q-wait__orbit">
             {WAITING_ORBIT_SLOTS.map((slot, i) => (
-              <div key={slot.nodeId} className="q-wait__orbit-arm" style={{ '--i': i }}>
+              <div key={slot.id} className="q-wait__orbit-arm" style={{ '--i': i }}>
                 <div className="q-wait__orbit-upright">
-                  <div
-                    className="q-wait__slot q-wait__slot--orbit"
-                    data-node-id={slot.nodeId}
-                  >
-                    <div className="q-wait__slot-crop">
-                      <img src={slot.src} alt="" width={slot.w} height={slot.h} decoding="async" />
-                    </div>
+                  <div className="q-wait__slot q-wait__slot--orbit">
+                    <img src={slot.src} alt="" width="160" height="160" decoding="async" />
+                    <span className="q-wait__slot-label">{slot.label}</span>
                   </div>
                 </div>
               </div>

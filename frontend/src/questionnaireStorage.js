@@ -216,6 +216,21 @@ function preferredPriceLevel(tiers) {
   return Math.round(valid.reduce((sum, n) => sum + n, 0) / valid.length)
 }
 
+function finiteCoordinate(value, min, max) {
+  const n = Number(value)
+  return Number.isFinite(n) && n >= min && n <= max ? n : null
+}
+
+function commuteMode(value) {
+  return value === 'walking' || value === 'driving' ? value : 'walking'
+}
+
+function commuteMinutes(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return 20
+  return Math.max(5, Math.min(120, Math.round(n)))
+}
+
 export function getGroupFeaturePreferences(groupId, actorId) {
   const row = getActorQuestionnaire(groupId, actorId)
   if (!row || typeof row !== 'object') return null
@@ -293,6 +308,23 @@ export function getGroupFeaturePreferences(groupId, actorId) {
     }
   }
 
+  const commuteLat = finiteCoordinate(row.commute_origin_latitude, -90, 90)
+  const commuteLng = finiteCoordinate(row.commute_origin_longitude, -180, 180)
+  if (commuteLat != null && commuteLng != null) {
+    features.commute = {
+      value: {
+        origin: {
+          latitude: commuteLat,
+          longitude: commuteLng,
+        },
+        mode: commuteMode(row.commute_mode),
+        max_minutes: commuteMinutes(row.commute_max_minutes),
+      },
+      importance: 4,
+      dealbreaker_strength: 2,
+    }
+  }
+
   return features
 }
 
@@ -363,6 +395,35 @@ export function loadDeliveryDraft(groupId, actorId) {
 export function saveDeliveryDraft(groupId, draft, actorId) {
   try {
     patchActorQuestionnaire(groupId, actorId, draft)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Simple commute step: current location + preferred travel mode + max minutes. */
+export function loadCommuteDraft(groupId, actorId) {
+  try {
+    const row = getActorQuestionnaire(groupId, actorId)
+    if (!row || typeof row !== 'object') return null
+    return {
+      commute_origin_latitude: finiteCoordinate(row.commute_origin_latitude, -90, 90),
+      commute_origin_longitude: finiteCoordinate(row.commute_origin_longitude, -180, 180),
+      commute_mode: commuteMode(row.commute_mode),
+      commute_max_minutes: commuteMinutes(row.commute_max_minutes),
+    }
+  } catch {
+    return null
+  }
+}
+
+export function saveCommuteDraft(groupId, draft, actorId) {
+  try {
+    patchActorQuestionnaire(groupId, actorId, {
+      commute_origin_latitude: finiteCoordinate(draft?.commute_origin_latitude, -90, 90),
+      commute_origin_longitude: finiteCoordinate(draft?.commute_origin_longitude, -180, 180),
+      commute_mode: commuteMode(draft?.commute_mode),
+      commute_max_minutes: commuteMinutes(draft?.commute_max_minutes),
+    })
   } catch {
     /* ignore */
   }

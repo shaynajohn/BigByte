@@ -4,49 +4,28 @@ import './recommendations.css'
 const API_BASE =
   import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
-const CATEGORY_IMAGES = [
-  { test: /coffee|tea|cafe/i, url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80' },
-  { test: /baker|donut|bagel|bread|pastr/i, url: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80' },
-  { test: /dessert|ice cream|bubble tea|boba/i, url: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=900&q=80' },
-  { test: /pizza/i, url: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=900&q=80' },
-  { test: /burger|sandwich/i, url: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=80' },
-  { test: /ramen|japanese|sushi|izakaya/i, url: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80' },
-  { test: /thai|vietnamese|burmese|asian/i, url: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&w=900&q=80' },
-  { test: /mexican|taco|latin|cuban|filipino/i, url: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&q=80' },
-  { test: /italian|pasta|mediterranean|greek/i, url: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=900&q=80' },
-  { test: /seafood|oyster/i, url: 'https://images.unsplash.com/photo-1559737558-2f5a35f4523b?auto=format&fit=crop&w=900&q=80' },
-  { test: /vegetarian|vegan|salad/i, url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80' },
+const LOADING_FOOD_TILES = [
+  { id: 'pizza', label: 'Pizza', src: '/food-spinner-pizza.svg' },
+  { id: 'thai', label: 'Thai', src: '/food-spinner-thai.svg' },
+  { id: 'sushi', label: 'Sushi', src: '/food-spinner-sushi.svg' },
 ]
 
-function pickCuisineLabel(categories) {
-  const raw = String(categories || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const skip = /restaurants|restaurant|food|bars?/i
-  const hit = raw.find((c) => !skip.test(c))
-  return hit || raw[0] || 'Dining'
+function formatMinutes(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return `${Math.max(1, Math.round(n))} min`
 }
 
-function pickAmbianceLabel(labels) {
-  const first = Array.isArray(labels) ? labels.find(Boolean) : null
-  if (!first) return 'Dining'
-  return String(first)
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
-function formatPriceLevel(priceRange) {
-  const level = Number(priceRange)
-  if (!Number.isFinite(level) || level < 1) return null
-  return '$'.repeat(Math.min(Math.round(level), 4))
+function formatMiles(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return `${n.toFixed(n < 10 ? 1 : 0)} mi`
 }
 
 function buildLocationLine(r) {
   const locality = [r.city, r.state].filter(Boolean).join(', ')
-  return [r.address, locality].filter(Boolean).join(' · ')
+  const address = [r.address, locality].filter(Boolean).join(' · ')
+  return [r.neighborhood, address].filter(Boolean).join(' · ')
 }
 
 function buildMapUrl(r) {
@@ -66,52 +45,55 @@ function buildSearchUrl(r, intent) {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`
 }
 
-function buildImageUrl(r) {
-  if (r.image_url) return r.image_url
-  const haystack = `${r.name || ''} ${r.categories || ''}`
-  const hit = CATEGORY_IMAGES.find(({ test }) => test.test(haystack))
-  return hit?.url || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80'
+function buildFoodDescription(categories) {
+  const skip = /^(restaurants?|food|bars?|cocktail bars)$/i
+  const labels = String(categories || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && !skip.test(s))
+  if (!labels.length) return 'San Francisco food spot'
+  return labels.slice(0, 3).join(' · ')
 }
 
-function buildReasons(r) {
-  const reasons = []
-  if (typeof r.category_fit === 'number' && r.category_fit >= 0.99) {
-    reasons.push('Matches selected food types')
-  }
-  if (r.relaxed_dealbreaker_fallback) {
-    reasons.push('Closest compromise')
-  }
-  if (typeof r.group_score === 'number' && !Number.isNaN(r.group_score)) {
-    reasons.push(`${Math.round(Number(r.group_score) * 100)}% match`)
-  }
-  if (r.price_range != null) {
-    reasons.push(formatPriceLevel(r.price_range))
-  }
-  if (r.good_for_groups) reasons.push('Group-friendly')
-  return reasons.slice(0, 3)
+function commuteModeLabel(mode) {
+  return mode === 'walking' ? 'Walk' : mode === 'driving' ? 'Drive' : 'Commute'
 }
 
-function buildTags(r) {
-  const tags = []
-  tags.push({ id: 'vibe', label: pickAmbianceLabel(r.ambiance_labels) })
-  tags.push({ id: 'cuisine', label: pickCuisineLabel(r.categories) })
-  if (r.stars != null) {
-    const s = Number(r.stars)
-    const label = Number.isInteger(s) ? `${s} Stars` : `${s.toFixed(1)} Stars`.replace('.0 Stars', ' Stars')
-    tags.push({ id: 'stars', label })
-  } else {
-    tags.push({ id: 'stars', label: '—' })
-  }
-  tags.push({ id: 'price', label: formatPriceLevel(r.price_range) || '$$' })
-  return tags
-}
+function buildCommuteChips(r) {
+  const chips = []
+  const memberCommutes = Array.isArray(r.member_commutes) ? r.member_commutes : []
+  const modes = Array.from(
+    new Set(memberCommutes.map((row) => row?.mode).filter((mode) => mode === 'walking' || mode === 'driving')),
+  )
+  const avgMinutes = formatMinutes(r.commute_summary?.avg_preferred_minutes)
+  const maxMinutes = formatMinutes(r.commute_summary?.max_preferred_minutes)
+  const maxMiles = formatMiles(r.commute_summary?.max_preferred_distance_miles)
+  const withinCount = Number(r.commute_summary?.within_max_count)
+  const memberCount = Number(r.commute_summary?.member_count)
 
-function buildMeta(r) {
-  const meta = []
-  if (r.review_count != null) {
-    meta.push(`${Number(r.review_count).toLocaleString()} reviews`)
+  if (modes.length === 1) {
+    const label = commuteModeLabel(modes[0])
+    const pieces =
+      memberCount > 1
+        ? [label, avgMinutes ? `avg ${avgMinutes}` : null, maxMinutes ? `max ${maxMinutes}` : null, maxMiles]
+        : [label, maxMinutes || avgMinutes, maxMiles]
+    chips.push([modes[0], pieces.filter(Boolean).join(' · ')])
+  } else if (avgMinutes || maxMinutes || maxMiles) {
+    chips.push([
+      'group',
+      [
+        'Group commute',
+        avgMinutes ? `avg ${avgMinutes}` : null,
+        maxMinutes ? `max ${maxMinutes}` : null,
+        maxMiles,
+      ].filter(Boolean).join(' · '),
+    ])
   }
-  return meta.filter(Boolean)
+
+  if (Number.isFinite(withinCount) && Number.isFinite(memberCount) && memberCount > 1) {
+    chips.push(['cap', withinCount === memberCount ? "Under everyone's cap" : `${withinCount}/${memberCount} under cap`])
+  }
+  return chips
 }
 
 function normalizeFromApi(rows) {
@@ -119,14 +101,11 @@ function normalizeFromApi(rows) {
     id: String(r.restaurant_id ?? r.id ?? r.name),
     name: r.name?.trim() || 'Food spot',
     location: buildLocationLine(r),
+    description: buildFoodDescription(r.categories),
     mapUrl: buildMapUrl(r),
     reservationUrl: buildSearchUrl(r, 'reservation'),
     menuUrl: buildSearchUrl(r, 'menu'),
-    imageUrl: buildImageUrl(r),
-    imageAlt: `${r.name?.trim() || 'Food spot'} preview`,
-    reasons: buildReasons(r),
-    meta: buildMeta(r),
-    tags: buildTags(r),
+    commuteChips: buildCommuteChips(r),
   }))
 }
 
@@ -170,7 +149,7 @@ export function RecommendationsPage({
       groupFeaturePreferences && Object.keys(groupFeaturePreferences).length > 0
     const body = groupId
       ? {
-          limit: 200,
+          limit: 300,
           fairness_alpha: 0.7,
         }
       : hasFeaturePreferences
@@ -179,10 +158,10 @@ export function RecommendationsPage({
             actor_id: id,
             features: groupFeaturePreferences,
           })),
-          limit: 200,
+          limit: 300,
           fairness_alpha: 0.7,
         }
-      : { actor_ids: ids, limit: 200 }
+      : { actor_ids: ids, limit: 300 }
     const la = typeof lat === 'number' ? lat : parseFloat(String(lat ?? ''))
     const lo = typeof lng === 'number' ? lng : parseFloat(String(lng ?? ''))
     if (!Number.isNaN(la) && !Number.isNaN(lo)) {
@@ -324,6 +303,26 @@ export function RecommendationsPage({
     )
   }
 
+  if (loading && !picks.length) {
+    return (
+      <div className="rec-loading-page" aria-live="polite" aria-busy="true">
+        <div className="rec-loading-card">
+          <p className="rec-loading-card__brand">BigByte</p>
+          <h1 className="rec-loading-card__title">Finalizing your top picks.</h1>
+          <div className="rec-loading-food" aria-hidden="true">
+            {LOADING_FOOD_TILES.map((tile, index) => (
+              <div key={tile.id} className="rec-loading-food__tile" style={{ '--i': index }}>
+                <img src={tile.src} alt="" width="96" height="96" decoding="async" />
+                <span>{tile.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="rec-loading-card__copy">Scoring the group, commute, and SF neighborhood matches...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`rec-page ${finalWinner ? 'rec-page--winner' : ''}`}>
       <header className="rec-page__header">
@@ -334,21 +333,18 @@ export function RecommendationsPage({
       </header>
 
       <div className="rec-page__stretch">
-        {loading ? <p className="rec-page__status">Loading recommendations…</p> : null}
         {!loading && note ? <p className="rec-page__status">{note}</p> : null}
         {!loading && finalWinner ? (
           <section className="rec-winner" aria-label="Final group pick">
-            <div className="rec-winner__image-wrap">
-              <img className="rec-winner__image" src={finalWinner.imageUrl} alt={finalWinner.imageAlt} />
-            </div>
             <div className="rec-winner__body">
               <p className="rec-consensus__eyebrow">Final pick</p>
               <h2 className="rec-winner__title">{finalWinner.name}</h2>
+              {finalWinner.description ? <p className="rec-card__description">{finalWinner.description}</p> : null}
               {finalWinner.location ? <p className="rec-winner__location">{finalWinner.location}</p> : null}
-              {finalWinner.reasons.length ? (
-                <ul className="rec-card__reasons" aria-label={`Why ${finalWinner.name} won`}>
-                  {finalWinner.reasons.slice(0, 2).map((reason) => (
-                    <li key={reason}>{reason}</li>
+              {finalWinner.commuteChips.length ? (
+                <ul className="rec-card__commute" aria-label={`Commute details for ${finalWinner.name}`}>
+                  {finalWinner.commuteChips.map(([id, label]) => (
+                    <li key={id}>{label}</li>
                   ))}
                 </ul>
               ) : null}
@@ -389,23 +385,14 @@ export function RecommendationsPage({
                 const myVote = votesData.votes?.[actorId]?.[r.id] || ''
                 return (
               <div className="rec-card__panel">
-                <div className="rec-card__image-wrap">
-                  <img className="rec-card__image" src={r.imageUrl} alt={r.imageAlt} loading="lazy" />
-                </div>
                 <div className="rec-card__body">
                   <h2 className="rec-card__name">{r.name}</h2>
+                  {r.description ? <p className="rec-card__description">{r.description}</p> : null}
                   {r.location ? <p className="rec-card__location">{r.location}</p> : null}
-                  {r.meta.length ? (
-                    <div className="rec-card__meta" aria-label="Food spot details">
-                      {r.meta.map((item) => (
-                        <span key={item}>{item}</span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {r.reasons.length ? (
-                    <ul className="rec-card__reasons" aria-label={`Why ${r.name} fits`}>
-                      {r.reasons.map((reason) => (
-                        <li key={reason}>{reason}</li>
+                  {r.commuteChips.length ? (
+                    <ul className="rec-card__commute" aria-label={`Commute details for ${r.name}`}>
+                      {r.commuteChips.map(([id, label]) => (
+                        <li key={id}>{label}</li>
                       ))}
                     </ul>
                   ) : null}

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 import secrets
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -25,6 +29,10 @@ from .recommender_rules import (
 app = FastAPI(title="BigByte")
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 FRONTEND_INDEX = FRONTEND_DIST / "index.html"
+OPENROUTESERVICE_API_KEY = (
+    os.environ.get("OPENROUTESERVICE_API_KEY") or os.environ.get("ORS_API_KEY") or ""
+).strip()
+ORS_MATRIX_BASE_URL = "https://api.heigit.org/openrouteservice/v2/matrix"
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,12 +62,53 @@ def demo_candidates(limit: int) -> list[dict[str, Any]]:
     ]
 
 
+def infer_sf_neighborhood(row: dict[str, Any]) -> str:
+    if row.get("neighborhood"):
+        return str(row["neighborhood"])
+    lat = _safe_float(row.get("latitude"))
+    lng = _safe_float(row.get("longitude"))
+    if lat is None or lng is None:
+        return "San Francisco"
+    if lat >= 37.789 and lng >= -122.399:
+        return "Embarcadero"
+    if lat >= 37.790 and -122.414 <= lng < -122.399:
+        return "Chinatown / North Beach"
+    if lat >= 37.790 and -122.425 <= lng < -122.414:
+        return "Nob Hill"
+    if lat >= 37.792 and -122.446 <= lng < -122.425:
+        return "Marina / Cow Hollow"
+    if 37.780 <= lat < 37.792 and -122.440 <= lng < -122.425:
+        return "Japantown / Fillmore"
+    if 37.782 <= lat < 37.792 and -122.421 <= lng < -122.407:
+        return "Tenderloin / Union Square"
+    if 37.775 <= lat < 37.784 and -122.431 <= lng < -122.414:
+        return "Hayes Valley / Civic Center"
+    if 37.769 <= lat < 37.790 and lng >= -122.407:
+        return "SoMa"
+    if 37.751 <= lat < 37.769 and lng >= -122.405:
+        return "Dogpatch / Potrero"
+    if 37.748 <= lat < 37.766 and -122.425 <= lng < -122.405:
+        return "Mission"
+    if 37.756 <= lat < 37.770 and -122.440 <= lng < -122.425:
+        return "Castro / Noe Valley"
+    if 37.766 <= lat < 37.774 and -122.456 <= lng < -122.438:
+        return "Haight"
+    if lat >= 37.775 and lng < -122.455:
+        return "Richmond"
+    if lat < 37.765 and lng < -122.455:
+        return "Sunset"
+    if lat < 37.746 and -122.430 <= lng < -122.405:
+        return "Bernal / Glen Park"
+    return "San Francisco"
+
+
 def restaurant_location_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "address": row.get("address"),
         "city": row.get("city"),
         "state": row.get("state"),
         "postal_code": row.get("postal_code"),
+        "neighborhood": infer_sf_neighborhood(row),
         "latitude": row.get("latitude"),
         "longitude": row.get("longitude"),
     }
@@ -84,6 +133,266 @@ def with_distance(row: dict[str, Any], latitude: float | None, longitude: float 
     return rr
 
 
+def _safe_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    return n if -180.0 <= n <= 180.0 else None
+
+
+def _safe_positive_int(value: Any, default: int = 20) -> int:
+    try:
+        n = int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+    return max(5, min(120, n))
+
+
+def _is_supported_commute_origin(lat: float, lng: float) -> bool:
+    # BigByte's catalog is SF-only; reject placeholder/global coordinates like 0,0.
+    return 37.0 <= lat <= 38.3 and -123.1 <= lng <= -121.5
+
+
+def _round_metric(value: float | None, places: int = 1) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), places)
+
+
+def _commute_specs(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for member in members:
+        feats = (member.get("features") or {}) if isinstance(member, dict) else {}
+        commute_feature = feats.get("commute") or {}
+        value = commute_feature.get("value") if isinstance(commute_feature, dict) else None
+        if not isinstance(value, dict):
+            continue
+        origin = value.get("origin") or {}
+        if not isinstance(origin, dict):
+            continue
+        lat = _safe_float(origin.get("latitude"))
+        lng = _safe_float(origin.get("longitude"))
+        if lat is None or lng is None:
+            continue
+        if not _is_supported_commute_origin(lat, lng):
+            continue
+        mode = str(value.get("mode") or "driving").lower()
+        if mode not in {"walking", "driving"}:
+            mode = "driving"
+        specs.append(
+            {
+                "actor_id": str(member.get("actor_id") or ""),
+                "latitude": lat,
+                "longitude": lng,
+                "mode": mode,
+                "max_minutes": _safe_positive_int(value.get("max_minutes")),
+            }
+        )
+    return specs
+
+
+def _commute_preference_count(members: list[dict[str, Any]]) -> int:
+    count = 0
+    for member in members:
+        feats = (member.get("features") or {}) if isinstance(member, dict) else {}
+        commute_feature = feats.get("commute") or {}
+        value = commute_feature.get("value") if isinstance(commute_feature, dict) else None
+        if isinstance(value, dict):
+            count += 1
+    return count
+
+
+def _estimated_route_metrics(
+    origin_lat: float,
+    origin_lng: float,
+    dest_lat: float,
+    dest_lng: float,
+    mode: Literal["walking", "driving"],
+) -> dict[str, Any]:
+    straight = haversine_miles(origin_lat, origin_lng, dest_lat, dest_lng)
+    if mode == "walking":
+        miles = straight * 1.2
+        minutes = (miles / 3.0) * 60.0
+    else:
+        miles = straight * 1.35
+        minutes = ((miles / 18.0) * 60.0) + 4.0
+    return {
+        "distance_miles": _round_metric(miles, 2),
+        "duration_minutes": _round_metric(minutes, 1),
+        "source": "estimated",
+    }
+
+
+def _fetch_openrouteservice_matrix(
+    specs: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    mode: Literal["walking", "driving"],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    if not OPENROUTESERVICE_API_KEY:
+        return {}
+
+    profile = "foot-walking" if mode == "walking" else "driving-car"
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for spec in specs:
+        routable = [
+            r
+            for r in candidates
+            if r.get("id") and r.get("latitude") is not None and r.get("longitude") is not None
+        ]
+        for start in range(0, len(routable), 24):
+            chunk = routable[start : start + 24]
+            locations = [
+                [spec["longitude"], spec["latitude"]],
+                *[[float(r["longitude"]), float(r["latitude"])] for r in chunk],
+            ]
+            request_body = json.dumps(
+                {
+                    "locations": locations,
+                    "sources": [0],
+                    "destinations": list(range(1, len(locations))),
+                    "metrics": ["distance", "duration"],
+                    "units": "m",
+                }
+            ).encode("utf-8")
+            request = urllib.request.Request(
+                f"{ORS_MATRIX_BASE_URL}/{profile}",
+                data=request_body,
+                headers={
+                    "Authorization": OPENROUTESERVICE_API_KEY,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "User-Agent": "BigByte/1.0",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            distances = (data.get("distances") or [[]])[0] or []
+            durations = (data.get("durations") or [[]])[0] or []
+            for idx, row in enumerate(chunk):
+                meters = distances[idx] if idx < len(distances) else None
+                seconds = durations[idx] if idx < len(durations) else None
+                if meters is None or seconds is None:
+                    continue
+                out[(spec["actor_id"], str(row["id"]))] = {
+                    "distance_miles": _round_metric(float(meters) / 1609.344, 2),
+                    "duration_minutes": _round_metric(float(seconds) / 60.0, 1),
+                    "source": "openrouteservice",
+                }
+    return out
+
+
+def attach_commute_metrics(
+    candidates: list[dict[str, Any]],
+    members: list[dict[str, Any]],
+) -> str | None:
+    specs = _commute_specs(members)
+    if not specs:
+        if _commute_preference_count(members):
+            return "Commute location was outside the Bay Area, so distance was ignored for these recommendations."
+        return None
+
+    note: str | None = None
+    route_maps: dict[str, dict[tuple[str, str], dict[str, Any]]] = {"walking": {}, "driving": {}}
+    if OPENROUTESERVICE_API_KEY:
+        try:
+            route_maps["walking"] = _fetch_openrouteservice_matrix(specs, candidates, "walking")
+            route_maps["driving"] = _fetch_openrouteservice_matrix(specs, candidates, "driving")
+        except (OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError):
+            route_maps = {"walking": {}, "driving": {}}
+            note = "OpenRouteService route lookup failed, so commute times are estimated from straight-line distance."
+    else:
+        note = "Add OPENROUTESERVICE_API_KEY for live walking and driving routes; commute times are estimated for now."
+
+    for row in candidates:
+        dest_lat = _safe_float(row.get("latitude"))
+        dest_lng = _safe_float(row.get("longitude"))
+        if dest_lat is None or dest_lng is None:
+            continue
+
+        member_rows: list[dict[str, Any]] = []
+        preferred_minutes: list[float] = []
+        preferred_miles: list[float] = []
+        walking_minutes: list[float] = []
+        walking_miles: list[float] = []
+        driving_minutes: list[float] = []
+        driving_miles: list[float] = []
+        within_count = 0
+
+        for spec in specs:
+            key = (spec["actor_id"], str(row.get("id")))
+            walking = route_maps["walking"].get(key) or _estimated_route_metrics(
+                spec["latitude"], spec["longitude"], dest_lat, dest_lng, "walking"
+            )
+            driving = route_maps["driving"].get(key) or _estimated_route_metrics(
+                spec["latitude"], spec["longitude"], dest_lat, dest_lng, "driving"
+            )
+            preferred = walking if spec["mode"] == "walking" else driving
+            preferred_duration = preferred.get("duration_minutes")
+            preferred_distance = preferred.get("distance_miles")
+            within_max = (
+                preferred_duration is not None
+                and float(preferred_duration) <= float(spec["max_minutes"])
+            )
+            if within_max:
+                within_count += 1
+            if preferred_duration is not None:
+                preferred_minutes.append(float(preferred_duration))
+            if preferred_distance is not None:
+                preferred_miles.append(float(preferred_distance))
+            if walking.get("duration_minutes") is not None:
+                walking_minutes.append(float(walking["duration_minutes"]))
+            if walking.get("distance_miles") is not None:
+                walking_miles.append(float(walking["distance_miles"]))
+            if driving.get("duration_minutes") is not None:
+                driving_minutes.append(float(driving["duration_minutes"]))
+            if driving.get("distance_miles") is not None:
+                driving_miles.append(float(driving["distance_miles"]))
+
+            member_rows.append(
+                {
+                    "actor_id": spec["actor_id"],
+                    "mode": spec["mode"],
+                    "max_minutes": spec["max_minutes"],
+                    "walking": walking,
+                    "driving": driving,
+                    "preferred_distance_miles": preferred_distance,
+                    "preferred_duration_minutes": preferred_duration,
+                    "within_max_minutes": within_max,
+                }
+            )
+
+        def avg(vals: list[float]) -> float | None:
+            return _round_metric(sum(vals) / len(vals), 1) if vals else None
+
+        row["_member_commutes"] = member_rows
+        row["_commute_summary"] = {
+            "member_count": len(member_rows),
+            "within_max_count": within_count,
+            "avg_preferred_minutes": avg(preferred_minutes),
+            "max_preferred_minutes": _round_metric(max(preferred_minutes), 1) if preferred_minutes else None,
+            "avg_preferred_distance_miles": avg(preferred_miles),
+            "max_preferred_distance_miles": _round_metric(max(preferred_miles), 2) if preferred_miles else None,
+            "preferred_modes": sorted({str(spec["mode"]) for spec in specs}),
+            "source": "openrouteservice" if route_maps["walking"] or route_maps["driving"] else "estimated",
+        }
+        row["_commute_member_count"] = len(member_rows)
+        row["_commute_within_max_count"] = within_count
+        row["_commute_all_within_max"] = bool(member_rows) and within_count == len(member_rows)
+        row["_commute_fit"] = within_count / len(member_rows) if member_rows else 1.0
+        row["_commute_max_preferred_minutes"] = max(preferred_minutes) if preferred_minutes else None
+        row["_commute_avg_preferred_minutes"] = sum(preferred_minutes) / len(preferred_minutes) if preferred_minutes else None
+        row["_walking_distance_miles"] = avg(walking_miles)
+        row["_walking_duration_minutes"] = avg(walking_minutes)
+        row["_driving_distance_miles"] = avg(driving_miles)
+        row["_driving_duration_minutes"] = avg(driving_minutes)
+
+    return note
+
+
 def recommendation_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "restaurant_id": row["id"],
@@ -96,6 +405,12 @@ def recommendation_payload(row: dict[str, Any]) -> dict[str, Any]:
         "category_fit": row.get("_category_fit"),
         "cuisine_group_fit": row.get("_cuisine_fraction"),
         "distance_miles": row.get("_distance_miles"),
+        "commute_summary": row.get("_commute_summary"),
+        "member_commutes": row.get("_member_commutes"),
+        "walking_distance_miles": row.get("_walking_distance_miles"),
+        "walking_duration_minutes": row.get("_walking_duration_minutes"),
+        "driving_distance_miles": row.get("_driving_distance_miles"),
+        "driving_duration_minutes": row.get("_driving_duration_minutes"),
         "stars": row.get("stars"),
         "review_count": row.get("review_count"),
         "price_range": row.get("price_range"),
@@ -384,7 +699,6 @@ def recommend_for_session_group(group_id: str, payload: SessionRecommendRequest)
 
 
 def run_feature_recommendations(payload: GroupFeatureRecommendRequest) -> dict[str, Any]:
-    candidates = [with_distance(r, payload.latitude, payload.longitude) for r in demo_candidates(payload.limit)]
     members = [
         {
             "actor_id": m.actor_id,
@@ -399,18 +713,49 @@ def run_feature_recommendations(payload: GroupFeatureRecommendRequest) -> dict[s
         }
         for m in payload.members
     ]
+    candidates = [with_distance(r, payload.latitude, payload.longitude) for r in demo_candidates(payload.limit)]
+    commute_note = attach_commute_metrics(candidates, members)
     scored = score_group_by_feature_importance(
         restaurants=candidates,
         members=members,
         fairness_alpha=float(payload.fairness_alpha),
         dealbreaker_threshold=float(payload.dealbreaker_threshold),
     )
+    note = commute_note
+    commute_scored = [r for r in scored if r.get("_commute_member_count")]
+    has_category_preferences = any(
+        bool(((m.get("features") or {}).get("categories") or {}).get("value"))
+        for m in members
+        if isinstance(m, dict)
+    )
+    if commute_scored:
+        feasible = [r for r in commute_scored if r.get("_commute_all_within_max")]
+        if feasible:
+            category_feasible = [r for r in feasible if float(r.get("_category_fit") or 0.0) > 0.0]
+            scored = category_feasible if has_category_preferences else feasible
+            if has_category_preferences and not scored:
+                cap_note = (
+                    "No food spots match the selected cuisine within everyone's max commute. "
+                    "Increase max minutes or add another cuisine for more options."
+                )
+                note = f"{commute_note} {cap_note}" if commute_note else cap_note
+            elif len(scored) < 3:
+                cap_note = (
+                    f"Only {len(scored)} matching food spot(s) fit everyone's max commute. "
+                    "Increase max minutes for more options."
+                )
+                note = f"{commute_note} {cap_note}" if commute_note else cap_note
+        else:
+            scored = []
+            cap_note = "No food spots fit everyone's max commute. Increase max minutes or switch commute mode for more options."
+            note = f"{commute_note} {cap_note}" if commute_note else cap_note
     top = scored[:3]
     return {
         "members": [{"actor_id": m.get("actor_id")} for m in members],
         "candidates_considered": len(candidates),
         "candidates_after_scoring": len(scored),
         "top_3": [recommendation_payload(t) for t in top],
+        "note": note,
     }
 
 

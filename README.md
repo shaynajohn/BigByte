@@ -21,6 +21,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 cd ..
+export OPENROUTESERVICE_API_KEY="your_openrouteservice_key"  # optional locally; enables live walking/driving route times
 python3 -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -48,7 +49,8 @@ Render:
 
 1. Push this repo to GitHub.
 2. In Render, choose **New** → **Blueprint** and select this repository.
-3. Render will read `render.yaml`, build the Docker image, and run:
+3. Add `OPENROUTESERVICE_API_KEY` as a Render environment variable to enable live walking/driving route times.
+4. Render will read `render.yaml`, build the Docker image, and run:
 
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port $PORT

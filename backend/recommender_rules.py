@@ -315,6 +315,51 @@ def _sat_categories(user_selected: list[str] | None, restaurant_categories: str 
     return 0.0
 
 
+def _sat_commute(member: dict[str, Any], commute_pref: dict[str, Any] | None, restaurant: dict[str, Any]) -> float:
+    """
+    Satisfaction for per-member commute constraints.
+    Route metrics are attached to each candidate before scoring by backend/main.py.
+    """
+    value = (commute_pref or {}).get("value") if isinstance(commute_pref, dict) else None
+    if not isinstance(value, dict):
+        return 1.0
+    mode = str(value.get("mode") or "driving").lower()
+    if mode not in {"walking", "driving"}:
+        mode = "driving"
+    try:
+        max_minutes = float(value.get("max_minutes") or 0)
+    except (TypeError, ValueError):
+        max_minutes = 0.0
+
+    actor_id = str(member.get("actor_id") or "")
+    commute_rows = restaurant.get("_member_commutes") or []
+    row = next(
+        (
+            c
+            for c in commute_rows
+            if isinstance(c, dict) and str(c.get("actor_id") or "") == actor_id
+        ),
+        None,
+    )
+    if not row:
+        return 0.5
+
+    duration = row.get("preferred_duration_minutes")
+    if duration is None:
+        duration = (row.get(mode) or {}).get("duration_minutes") if isinstance(row.get(mode), dict) else None
+    try:
+        minutes = float(duration)
+    except (TypeError, ValueError):
+        return 0.5
+
+    if max_minutes <= 0:
+        return max(0.0, min(1.0, 1.0 - (minutes / 90.0)))
+    if minutes <= max_minutes:
+        return 1.0
+    overage_ratio = (minutes - max_minutes) / max(max_minutes, 10.0)
+    return max(0.0, 1.0 - overage_ratio)
+
+
 def score_group_by_feature_importance(
     *,
     restaurants: list[dict[str, Any]],
@@ -404,6 +449,14 @@ def score_group_by_feature_importance(
             cats.get("dealbreaker_strength"),
         )
 
+        commute = feats.get("commute") or {}
+        add(
+            "commute",
+            _sat_commute(m, commute, r),
+            commute.get("importance"),
+            commute.get("dealbreaker_strength"),
+        )
+
         if total_w <= 0.0:
             return 1.0, contrib
         return max(0.0, min(1.0, total / total_w)), contrib
@@ -465,6 +518,8 @@ def score_group_by_feature_importance(
     scored.sort(
         key=lambda x: (
             float(x.get("_category_fit") or 0.0),
+            float(x.get("_commute_fit") if x.get("_commute_fit") is not None else 1.0),
+            -float(x.get("_commute_max_preferred_minutes") or 0.0),
             float(x.get("_group_score") or 0.0),
         ),
         reverse=True,
@@ -472,6 +527,8 @@ def score_group_by_feature_importance(
     soft_scored.sort(
         key=lambda x: (
             float(x.get("_category_fit") or 0.0),
+            float(x.get("_commute_fit") if x.get("_commute_fit") is not None else 1.0),
+            -float(x.get("_commute_max_preferred_minutes") or 0.0),
             float(x.get("_group_score") or 0.0),
         ),
         reverse=True,
