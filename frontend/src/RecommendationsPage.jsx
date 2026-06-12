@@ -122,24 +122,13 @@ function buildCommuteChips(r) {
   return chips
 }
 
-function buildMatchLine(r) {
-  const neighborhood = r.neighborhood ? `in ${r.neighborhood}` : 'in SF'
-  const commute = formatMinutes(r.commute_summary?.max_preferred_minutes)
-  if (commute) return `${neighborhood} · about ${commute} by your selected mode`
-  return `${neighborhood} · matches the group's food mood`
-}
-
 function normalizeFromApi(rows) {
-  const rankLabels = ['Best fit', 'Easy yes', 'Wildcard']
-  return (rows || []).slice(0, 3).map((r, index) => ({
+  return (rows || []).slice(0, 3).map((r) => ({
     id: String(r.restaurant_id ?? r.id ?? r.name),
     name: r.name?.trim() || 'Food spot',
-    rankLabel: rankLabels[index] || `Pick ${index + 1}`,
     location: buildLocationLine(r),
     description: buildFoodDescription(r.categories),
-    matchLine: buildMatchLine(r),
     mapUrl: buildMapUrl(r),
-    reservationUrl: buildSearchUrl(r, 'reservation'),
     menuUrl: buildSearchUrl(r, 'menu'),
     commuteChips: buildCommuteChips(r),
   }))
@@ -355,7 +344,6 @@ export function RecommendationsPage({
               <p className="rec-consensus__eyebrow">Final pick</p>
               <h2 className="rec-winner__title">{finalWinner.name}</h2>
               {finalWinner.description ? <p className="rec-card__description">{finalWinner.description}</p> : null}
-              {finalWinner.matchLine ? <p className="rec-card__match">{finalWinner.matchLine}</p> : null}
               {finalWinner.location ? <p className="rec-winner__location">{finalWinner.location}</p> : null}
               {finalWinner.commuteChips.length ? (
                 <ul className="rec-card__commute" aria-label={`Commute details for ${finalWinner.name}`}>
@@ -368,9 +356,6 @@ export function RecommendationsPage({
                 <a href={finalWinner.mapUrl} target="_blank" rel="noreferrer">
                   Maps
                 </a>
-                <a href={finalWinner.reservationUrl} target="_blank" rel="noreferrer">
-                  Reservation
-                </a>
                 <a href={finalWinner.menuUrl} target="_blank" rel="noreferrer">
                   Menu
                 </a>
@@ -379,17 +364,6 @@ export function RecommendationsPage({
                 </button>
               </div>
             </div>
-          </section>
-        ) : null}
-        {!loading && picks.length && !finalWinner ? (
-          <section className="rec-consensus" aria-label="Group voting status">
-            <p className="rec-consensus__eyebrow">Consensus round</p>
-            <h2 className="rec-consensus__title">
-              {leadingPick ? `${leadingPick.name} is leading` : 'Pick what you would actually say yes to'}
-            </h2>
-            <p className="rec-consensus__copy">
-              Vote quickly. BigByte keeps the list short so the group can decide.
-            </p>
           </section>
         ) : null}
 
@@ -402,10 +376,8 @@ export function RecommendationsPage({
                 return (
               <div className="rec-card__panel">
                 <div className="rec-card__body">
-                  <p className="rec-card__eyebrow">{r.rankLabel}</p>
                   <h2 className="rec-card__name">{r.name}</h2>
                   {r.description ? <p className="rec-card__description">{r.description}</p> : null}
-                  {r.matchLine ? <p className="rec-card__match">{r.matchLine}</p> : null}
                   {r.location ? <p className="rec-card__location">{r.location}</p> : null}
                   {r.commuteChips.length ? (
                     <ul className="rec-card__commute" aria-label={`Commute details for ${r.name}`}>
@@ -416,14 +388,10 @@ export function RecommendationsPage({
                   ) : null}
                   {groupId ? (
                     <div className="rec-vote" aria-label={`Vote on ${r.name}`}>
-                      <div className="rec-card__links">
-                        <a href={r.mapUrl} target="_blank" rel="noreferrer">Maps</a>
-                        <a href={r.menuUrl} target="_blank" rel="noreferrer">Menu</a>
-                      </div>
                       <div className="rec-vote__buttons">
                         {[
-                          ['love', "I'm in"],
-                          ['maybe', 'Could work'],
+                          ['love', 'Yes'],
+                          ['maybe', 'Maybe'],
                           ['pass', 'Pass'],
                         ].map(([value, label]) => (
                           <button
@@ -438,7 +406,7 @@ export function RecommendationsPage({
                         ))}
                       </div>
                       <p className="rec-vote__counts">
-                        {counts.love || 0} in · {counts.maybe || 0} maybe · {counts.pass || 0} pass
+                        {counts.love || 0} yes · {counts.maybe || 0} maybe · {counts.pass || 0} pass
                       </p>
                     </div>
                   ) : null}
@@ -454,16 +422,10 @@ export function RecommendationsPage({
       {!finalWinner && winnerPick ? (
         <div className="rec-sticky-pick">
           <button type="button" onClick={() => finalizeWinner(winnerPick.id)}>
-            Choose leading pick: {winnerPick.name}
+            Pick {winnerPick.name}
           </button>
         </div>
       ) : null}
-
-      <div className="rec-page__footer">
-        <button type="button" className="rec-page__retry" onClick={onStartNewGroup}>
-          Start new group
-        </button>
-      </div>
     </div>
   )
 }
