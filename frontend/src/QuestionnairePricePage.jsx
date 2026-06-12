@@ -1,61 +1,90 @@
-import { useCallback, useMemo, useState } from 'react'
-import { loadPriceDraft, savePriceDraft } from './questionnaireStorage.js'
-import './questionnaire.css'
+import { useCallback, useMemo, useState } from "react";
+import { loadPriceDraft, savePriceDraft } from "./questionnaireStorage.js";
+import "./questionnaire.css";
 
 const PRICE_TIERS = [
-  { tier: 1, label: '$' },
-  { tier: 2, label: '$$' },
-  { tier: 3, label: '$$$' },
-  { tier: 4, label: '$$$$' },
-]
+  { tier: 1, label: "$" },
+  { tier: 2, label: "$$" },
+  { tier: 3, label: "$$$" },
+  { tier: 4, label: "$$$$" },
+];
 
 /**
  * Price range step (Figma 31:277): ¼–½–¼ layout, $–$$$$ multi-select + dealbreaker.
  */
-export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, onComplete }) {
-  const initial = useMemo(() => loadPriceDraft(groupId, actorId), [groupId, actorId])
-  const [selected, setSelected] = useState(() => new Set(initial?.price_tiers_accepted ?? []))
-  const [dealbreaker, setDealbreaker] = useState(initial?.price_dealbreaker_level ?? 3)
-  const [localError, setLocalError] = useState('')
+export function QuestionnairePricePage({
+  groupId,
+  groupExists,
+  actorId,
+  onBack,
+  onComplete,
+}) {
+  const initial = useMemo(
+    () => loadPriceDraft(groupId, actorId),
+    [groupId, actorId],
+  );
+  const [selected, setSelected] = useState(
+    () => new Set(initial?.price_tiers_accepted ?? []),
+  );
+  const [dealbreaker, setDealbreaker] = useState(
+    initial?.price_dealbreaker_level ?? 3,
+  );
+  const [localError, setLocalError] = useState("");
 
   const toggleTier = useCallback((tier) => {
-    setLocalError('')
+    setLocalError("");
     setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(tier)) next.delete(tier)
-      else next.add(tier)
-      return next
-    })
-  }, [])
+      const next = new Set(prev);
+      if (next.has(tier)) next.delete(tier);
+      else next.add(tier);
+      return next;
+    });
+  }, []);
 
   function handleNext() {
-    setLocalError('')
+    setLocalError("");
     if (selected.size === 0) {
-      setLocalError('Select at least one price range.')
-      return
+      setLocalError("Select at least one price range.");
+      return;
     }
-    const price_tiers_accepted = [...selected].sort((a, b) => a - b)
-    const price_dealbreaker_level = dealbreaker
-    savePriceDraft(groupId, { price_tiers_accepted, price_dealbreaker_level }, actorId)
-    onComplete({ price_tiers_accepted, price_dealbreaker_level })
+    const price_tiers_accepted = [...selected].sort((a, b) => a - b);
+    const price_dealbreaker_level = dealbreaker;
+    savePriceDraft(
+      groupId,
+      { price_tiers_accepted, price_dealbreaker_level },
+      actorId,
+    );
+    onComplete({ price_tiers_accepted, price_dealbreaker_level });
   }
 
   /* Figma canvas 31:312 / 31:313 — price frame 31:277 side rails (not stars heroes) */
   const asideLeft = (
     <div className="q-stars__aside q-stars__aside--left" aria-hidden>
       <div className="q-stars__aside-crop q-stars__aside-crop--price-left">
-        <img src="/questionnaire-price-left.png" alt="" width={735} height={885} decoding="async" />
+        <img
+          src="/questionnaire-price-left.png"
+          alt=""
+          width={735}
+          height={885}
+          decoding="async"
+        />
       </div>
     </div>
-  )
+  );
 
   const asideRight = (
     <div className="q-stars__aside q-stars__aside--right" aria-hidden>
       <div className="q-stars__aside-crop q-stars__aside-crop--price-right">
-        <img src="/questionnaire-price-right.png" alt="" width={735} height={859} decoding="async" />
+        <img
+          src="/questionnaire-price-right.png"
+          alt=""
+          width={735}
+          height={859}
+          decoding="async"
+        />
       </div>
     </div>
-  )
+  );
 
   if (!groupExists) {
     return (
@@ -63,7 +92,8 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
         {asideLeft}
         <div className="q-stars__main">
           <p className="q-stars__missing">
-            This group is not available. Return to the group list or use a valid invite link.
+            This group is not available. Return to the group list or use a valid
+            invite link.
           </p>
           <button type="button" className="q-stars__next" onClick={onBack}>
             Back
@@ -71,7 +101,7 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
         </div>
         {asideRight}
       </div>
-    )
+    );
   }
 
   return (
@@ -79,13 +109,23 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
       {asideLeft}
 
       <div className="q-stars__main">
-        <button type="button" className="q-stars__back" onClick={onBack} aria-label="Go back">
-          <img src="/q-stars-back.svg" alt="" width={46} height={46} decoding="async" />
+        <button
+          type="button"
+          className="q-stars__back"
+          onClick={onBack}
+          aria-label="Go back"
+        >
+          <img
+            src="/q-stars-back.svg"
+            alt=""
+            width={46}
+            height={46}
+            decoding="async"
+          />
         </button>
 
-        <h1 className="q-stars__title">
-          What price range do you prefer? (Select all that apply)
-        </h1>
+        <p className="q-flow__eyebrow">Step 3 of 5</p>
+        <h1 className="q-stars__title">Budget?</h1>
 
         {localError ? (
           <div className="q-stars__banner-error" role="alert">
@@ -95,7 +135,7 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
 
         <ul className="q-stars__options" aria-label="Price ranges">
           {PRICE_TIERS.map(({ tier, label }) => {
-            const checked = selected.has(tier)
+            const checked = selected.has(tier);
             return (
               <li key={tier} className="q-stars__option">
                 <button
@@ -109,7 +149,7 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
                   <span className="q-stars__option-price-label">{label}</span>
                 </button>
               </li>
-            )
+            );
           })}
         </ul>
 
@@ -124,8 +164,8 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
               step={1}
               value={dealbreaker}
               onChange={(e) => {
-                setLocalError('')
-                setDealbreaker(Number(e.target.value))
+                setLocalError("");
+                setDealbreaker(Number(e.target.value));
               }}
               aria-valuemin={1}
               aria-valuemax={5}
@@ -146,5 +186,5 @@ export function QuestionnairePricePage({ groupId, groupExists, actorId, onBack, 
 
       {asideRight}
     </div>
-  )
+  );
 }

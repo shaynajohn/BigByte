@@ -142,62 +142,24 @@
   line-height: 1.12;
 }
 
+.rec-loading-card::after {
+  content: 'Taste -> distance -> consensus';
+  display: inline-flex;
+  margin-top: 1rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(245, 238, 220, 0.3);
+  border-radius: 999px;
+  font-family: 'Jacques Francois', serif;
+  font-size: 0.82rem;
+  color: rgba(245, 238, 220, 0.82);
+}
+
 .rec-loading-card__copy {
   margin: 0.9rem 0 0;
   font-family: 'Libre Baskerville', Georgia, serif;
   font-size: 0.95rem;
   line-height: 1.45;
   color: rgba(245, 238, 220, 0.88);
-}
-
-.rec-loading-food {
-  display: flex;
-  justify-content: center;
-  gap: 0.65rem;
-  margin-top: 1rem;
-}
-
-.rec-loading-food__tile {
-  position: relative;
-  width: clamp(4.1rem, 17vw, 5.6rem);
-  aspect-ratio: 1;
-  overflow: hidden;
-  border: 2px solid rgba(245, 238, 220, 0.72);
-  border-radius: 18px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
-  animation: rec-loading-bob 1.15s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 0.14s);
-}
-
-.rec-loading-food__tile img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.rec-loading-food__tile span {
-  position: absolute;
-  left: 0.35rem;
-  right: 0.35rem;
-  bottom: 0.35rem;
-  padding: 0.16rem 0.35rem;
-  border-radius: 999px;
-  background: rgba(60, 0, 0, 0.68);
-  font-family: 'Jacques Francois', serif;
-  font-size: 0.68rem;
-  color: var(--rec-cream);
-}
-
-@keyframes rec-loading-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
 }
 
 .rec-consensus {
@@ -352,6 +314,19 @@
   justify-content: flex-start;
 }
 
+.rec-card__eyebrow {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: var(--rec-cream);
+  color: var(--rec-bg);
+  font-family: 'Jacques Francois', serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .rec-card__name {
   margin: 0;
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Libre Baskerville', Georgia, serif;
@@ -369,6 +344,16 @@
   line-height: 1.35;
   text-align: left;
   color: rgba(245, 238, 220, 0.9);
+}
+
+.rec-card__match {
+  margin: -0.25rem 0 0;
+  padding-left: 0.65rem;
+  border-left: 2px solid rgba(245, 238, 220, 0.5);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: rgba(245, 238, 220, 0.86);
 }
 
 .rec-card__location {
@@ -407,6 +392,27 @@
   align-items: flex-start;
   gap: 0.35rem;
   margin-top: auto;
+}
+
+.rec-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rec-card__links a {
+  padding: 0.32rem 0.62rem;
+  border: 1px solid rgba(245, 238, 220, 0.42);
+  border-radius: 999px;
+  color: var(--rec-cream);
+  font-family: 'Jacques Francois', serif;
+  font-size: 0.78rem;
+  text-decoration: none;
+  background: rgba(245, 238, 220, 0.08);
+}
+
+.rec-card__links a:hover {
+  background: rgba(245, 238, 220, 0.16);
 }
 
 .rec-vote__buttons {

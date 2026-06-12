@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { derivePreferencesFromText } from './derivePreferences.js'
 import { JoinGroupPage } from './JoinGroupPage.jsx'
 import { LandingPage } from './LandingPage.jsx'
-import { QuestionnaireStarsPage } from './QuestionnaireStarsPage.jsx'
 import { QuestionnaireStep2Page } from './QuestionnaireStep2Page.jsx'
 import { QuestionnairePricePage } from './QuestionnairePricePage.jsx'
-import { QuestionnaireBooleanStepPage } from './QuestionnaireBooleanStep.jsx'
 import { QuestionnaireCommutePage } from './QuestionnaireCommutePage.jsx'
+import { QuestionnairePlanPage } from './QuestionnairePlanPage.jsx'
 import { QuestionnaireAmbiancePage } from './QuestionnaireAmbiancePage.jsx'
-import { QuestionnaireWaitingPage } from './QuestionnaireWaitingPage.jsx'
 import { RecommendationsPage } from './RecommendationsPage.jsx'
 import { getGroupFeaturePreferences } from './questionnaireStorage.js'
 import './App.css'
@@ -500,13 +498,11 @@ function App() {
     (routeKey === 'join' && parts[1]) ||
     (routeKey === 'questionnaire' && parts[1]) ||
     null
-  const questionnaireWaiting =
-    routeKey === 'questionnaire' && groupIdFromRoute && parts[2] === 'waiting'
   const questionnaireResults =
-    routeKey === 'questionnaire' && groupIdFromRoute && parts[2] === 'results'
+    routeKey === 'questionnaire' && groupIdFromRoute && (parts[2] === 'results' || parts[2] === 'waiting')
   const questionnaireStep =
     routeKey === 'questionnaire' && groupIdFromRoute
-      ? ['commute', 'stars', '2', '3', '4', '5', '6', '8'].includes(parts[2])
+      ? ['commute', '2', '3', 'plan', '8'].includes(parts[2])
         ? parts[2]
         : 'commute'
       : 'commute'
@@ -813,22 +809,7 @@ function App() {
         )
       ) : (
         routeKey === 'questionnaire' && groupIdFromRoute ? (
-          questionnaireWaiting ? (
-            <QuestionnaireWaitingPage
-              groupId={groupIdFromRoute}
-              groupExists={!!currentGroup}
-              actorId={actorId}
-              memberActorIds={questionnaireMemberActorIds}
-              onBackToGroup={() => {
-                setError('')
-                navigate(`/group/${groupIdFromRoute}`)
-              }}
-              onContinueToResults={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/results`)
-              }}
-            />
-          ) : questionnaireResults ? (
+          questionnaireResults ? (
             <RecommendationsPage
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
@@ -853,7 +834,21 @@ function App() {
               }}
               onComplete={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/stars`)
+                navigate(`/questionnaire/${groupIdFromRoute}/2`)
+              }}
+            />
+          ) : questionnaireStep === 'plan' ? (
+            <QuestionnairePlanPage
+              groupId={groupIdFromRoute}
+              groupExists={!!currentGroup}
+              actorId={actorId}
+              onBack={() => {
+                setError('')
+                navigate(`/questionnaire/${groupIdFromRoute}/3`)
+              }}
+              onComplete={() => {
+                setError('')
+                navigate(`/questionnaire/${groupIdFromRoute}/8`)
               }}
             />
           ) : questionnaireStep === '8' ? (
@@ -863,61 +858,13 @@ function App() {
               actorId={actorId}
               onBack={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/6`)
+                navigate(`/questionnaire/${groupIdFromRoute}/plan`)
               }}
               onComplete={() => {
                 setError('')
                 saveCurrentQuestionnaireAnswers(groupIdFromRoute)
-                  .then(() => navigate(`/questionnaire/${groupIdFromRoute}/waiting`))
+                  .then(() => navigate(`/questionnaire/${groupIdFromRoute}/results`))
                   .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-              }}
-            />
-          ) : questionnaireStep === '6' ? (
-            <QuestionnaireBooleanStepPage
-              key="delivery"
-              groupId={groupIdFromRoute}
-              groupExists={!!currentGroup}
-              actorId={actorId}
-              variant="delivery"
-              onBack={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/5`)
-              }}
-              onComplete={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/8`)
-              }}
-            />
-          ) : questionnaireStep === '5' ? (
-            <QuestionnaireBooleanStepPage
-              key="takeout"
-              groupId={groupIdFromRoute}
-              groupExists={!!currentGroup}
-              actorId={actorId}
-              variant="takeout"
-              onBack={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/4`)
-              }}
-              onComplete={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/6`)
-              }}
-            />
-          ) : questionnaireStep === '4' ? (
-            <QuestionnaireBooleanStepPage
-              key="table-service"
-              groupId={groupIdFromRoute}
-              groupExists={!!currentGroup}
-              actorId={actorId}
-              variant="table_service"
-              onBack={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/3`)
-              }}
-              onComplete={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/5`)
               }}
             />
           ) : questionnaireStep === '3' ? (
@@ -931,7 +878,7 @@ function App() {
               }}
               onComplete={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/4`)
+                navigate(`/questionnaire/${groupIdFromRoute}/plan`)
               }}
             />
           ) : questionnaireStep === '2' ? (
@@ -941,28 +888,14 @@ function App() {
               actorId={actorId}
               onBack={() => {
                 setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/stars`)
+                navigate(`/questionnaire/${groupIdFromRoute}`)
               }}
               onNext={() => {
                 setError('')
                 navigate(`/questionnaire/${groupIdFromRoute}/3`)
               }}
             />
-          ) : (
-            <QuestionnaireStarsPage
-              groupId={groupIdFromRoute}
-              groupExists={!!currentGroup}
-              actorId={actorId}
-              onBack={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}`)
-              }}
-              onComplete={() => {
-                setError('')
-                navigate(`/questionnaire/${groupIdFromRoute}/2`)
-              }}
-            />
-          )
+          ) : null
         ) : routeKey === 'join' && groupIdFromRoute ? (
           <JoinGroupPage
             groupId={groupIdFromRoute}

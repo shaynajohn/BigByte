@@ -226,6 +226,23 @@ def _estimated_route_metrics(
     }
 
 
+def _rough_route_radius_miles(max_minutes: int, mode: Literal["walking", "driving"]) -> float:
+    if mode == "walking":
+        route_miles = (float(max_minutes) / 60.0) * 3.0
+        return (route_miles * 1.8) + 0.5
+    route_miles = (max(0.0, float(max_minutes) - 4.0) / 60.0) * 18.0
+    return (route_miles * 1.8) + 1.0
+
+
+def _should_route_candidate(spec: dict[str, Any], row: dict[str, Any], mode: Literal["walking", "driving"]) -> bool:
+    dest_lat = _safe_float(row.get("latitude"))
+    dest_lng = _safe_float(row.get("longitude"))
+    if dest_lat is None or dest_lng is None:
+        return False
+    straight = haversine_miles(float(spec["latitude"]), float(spec["longitude"]), dest_lat, dest_lng)
+    return straight <= _rough_route_radius_miles(int(spec.get("max_minutes") or 20), mode)
+
+
 def _fetch_openrouteservice_matrix(
     specs: list[dict[str, Any]],
     candidates: list[dict[str, Any]],
@@ -241,6 +258,7 @@ def _fetch_openrouteservice_matrix(
             r
             for r in candidates
             if r.get("id") and r.get("latitude") is not None and r.get("longitude") is not None
+            and _should_route_candidate(spec, r, mode)
         ]
         for start in range(0, len(routable), 24):
             chunk = routable[start : start + 24]
@@ -297,15 +315,16 @@ def attach_commute_metrics(
 
     note: str | None = None
     route_maps: dict[str, dict[tuple[str, str], dict[str, Any]]] = {"walking": {}, "driving": {}}
+    preferred_modes = sorted({str(spec["mode"]) for spec in specs if spec.get("mode") in {"walking", "driving"}})
     if OPENROUTESERVICE_API_KEY:
         try:
-            route_maps["walking"] = _fetch_openrouteservice_matrix(specs, candidates, "walking")
-            route_maps["driving"] = _fetch_openrouteservice_matrix(specs, candidates, "driving")
+            for mode in preferred_modes:
+                route_maps[mode] = _fetch_openrouteservice_matrix(specs, candidates, mode)  # type: ignore[index]
         except (OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, KeyError):
             route_maps = {"walking": {}, "driving": {}}
             note = "OpenRouteService route lookup failed, so commute times are estimated from straight-line distance."
     else:
-        note = "Add OPENROUTESERVICE_API_KEY for live walking and driving routes; commute times are estimated for now."
+        note = "Commute times are estimated."
 
     for row in candidates:
         dest_lat = _safe_float(row.get("latitude"))
@@ -316,6 +335,7 @@ def attach_commute_metrics(
         member_rows: list[dict[str, Any]] = []
         preferred_minutes: list[float] = []
         preferred_miles: list[float] = []
+        overage_minutes: list[float] = []
         walking_minutes: list[float] = []
         walking_miles: list[float] = []
         driving_minutes: list[float] = []
@@ -324,13 +344,10 @@ def attach_commute_metrics(
 
         for spec in specs:
             key = (spec["actor_id"], str(row.get("id")))
-            walking = route_maps["walking"].get(key) or _estimated_route_metrics(
-                spec["latitude"], spec["longitude"], dest_lat, dest_lng, "walking"
+            preferred_mode = spec["mode"]
+            preferred = route_maps[preferred_mode].get(key) or _estimated_route_metrics(
+                spec["latitude"], spec["longitude"], dest_lat, dest_lng, preferred_mode
             )
-            driving = route_maps["driving"].get(key) or _estimated_route_metrics(
-                spec["latitude"], spec["longitude"], dest_lat, dest_lng, "driving"
-            )
-            preferred = walking if spec["mode"] == "walking" else driving
             preferred_duration = preferred.get("duration_minutes")
             preferred_distance = preferred.get("distance_miles")
             within_max = (
@@ -339,26 +356,31 @@ def attach_commute_metrics(
             )
             if within_max:
                 within_count += 1
+                overage_minutes.append(0.0)
+            elif preferred_duration is not None:
+                overage_minutes.append(max(0.0, float(preferred_duration) - float(spec["max_minutes"])))
             if preferred_duration is not None:
                 preferred_minutes.append(float(preferred_duration))
             if preferred_distance is not None:
                 preferred_miles.append(float(preferred_distance))
-            if walking.get("duration_minutes") is not None:
-                walking_minutes.append(float(walking["duration_minutes"]))
-            if walking.get("distance_miles") is not None:
-                walking_miles.append(float(walking["distance_miles"]))
-            if driving.get("duration_minutes") is not None:
-                driving_minutes.append(float(driving["duration_minutes"]))
-            if driving.get("distance_miles") is not None:
-                driving_miles.append(float(driving["distance_miles"]))
+            if preferred_mode == "walking":
+                if preferred.get("duration_minutes") is not None:
+                    walking_minutes.append(float(preferred["duration_minutes"]))
+                if preferred.get("distance_miles") is not None:
+                    walking_miles.append(float(preferred["distance_miles"]))
+            if preferred_mode == "driving":
+                if preferred.get("duration_minutes") is not None:
+                    driving_minutes.append(float(preferred["duration_minutes"]))
+                if preferred.get("distance_miles") is not None:
+                    driving_miles.append(float(preferred["distance_miles"]))
 
             member_rows.append(
                 {
                     "actor_id": spec["actor_id"],
                     "mode": spec["mode"],
                     "max_minutes": spec["max_minutes"],
-                    "walking": walking,
-                    "driving": driving,
+                    "walking": preferred if preferred_mode == "walking" else None,
+                    "driving": preferred if preferred_mode == "driving" else None,
                     "preferred_distance_miles": preferred_distance,
                     "preferred_duration_minutes": preferred_duration,
                     "within_max_minutes": within_max,
@@ -385,6 +407,7 @@ def attach_commute_metrics(
         row["_commute_fit"] = within_count / len(member_rows) if member_rows else 1.0
         row["_commute_max_preferred_minutes"] = max(preferred_minutes) if preferred_minutes else None
         row["_commute_avg_preferred_minutes"] = sum(preferred_minutes) / len(preferred_minutes) if preferred_minutes else None
+        row["_commute_max_overage_minutes"] = max(overage_minutes) if overage_minutes else None
         row["_walking_distance_miles"] = avg(walking_miles)
         row["_walking_duration_minutes"] = avg(walking_minutes)
         row["_driving_distance_miles"] = avg(driving_miles)
@@ -730,24 +753,56 @@ def run_feature_recommendations(payload: GroupFeatureRecommendRequest) -> dict[s
     )
     if commute_scored:
         feasible = [r for r in commute_scored if r.get("_commute_all_within_max")]
+        category_scored = [
+            r for r in commute_scored if float(r.get("_category_fit") or 0.0) > 0.0
+        ] if has_category_preferences else commute_scored
         if feasible:
             category_feasible = [r for r in feasible if float(r.get("_category_fit") or 0.0) > 0.0]
             scored = category_feasible if has_category_preferences else feasible
             if has_category_preferences and not scored:
+                scored = sorted(
+                    category_scored,
+                    key=lambda r: (
+                        -float(r.get("_commute_fit") or 0.0),
+                        float(r.get("_commute_max_overage_minutes") or 9999.0),
+                        float(r.get("_commute_max_preferred_minutes") or 9999.0),
+                        -float(r.get("_group_score") or 0.0),
+                    ),
+                )
                 cap_note = (
-                    "No food spots match the selected cuisine within everyone's max commute. "
-                    "Increase max minutes or add another cuisine for more options."
+                    "No exact cuisine match fit everyone's max commute, so these are the closest cuisine matches."
                 )
                 note = f"{commute_note} {cap_note}" if commute_note else cap_note
             elif len(scored) < 3:
+                seen_ids = {r.get("id") for r in scored}
+                fill = [
+                    r for r in category_scored
+                    if r.get("id") not in seen_ids
+                ]
+                fill.sort(
+                    key=lambda r: (
+                        -float(r.get("_commute_fit") or 0.0),
+                        float(r.get("_commute_max_overage_minutes") or 9999.0),
+                        float(r.get("_commute_max_preferred_minutes") or 9999.0),
+                        -float(r.get("_group_score") or 0.0),
+                    ),
+                )
+                scored = [*scored, *fill]
                 cap_note = (
-                    f"Only {len(scored)} matching food spot(s) fit everyone's max commute. "
-                    "Increase max minutes for more options."
+                    "Some picks are closest nearby matches because fewer than three exact commute matches fit."
                 )
                 note = f"{commute_note} {cap_note}" if commute_note else cap_note
         else:
-            scored = []
-            cap_note = "No food spots fit everyone's max commute. Increase max minutes or switch commute mode for more options."
+            scored = sorted(
+                category_scored,
+                key=lambda r: (
+                    -float(r.get("_commute_fit") or 0.0),
+                    float(r.get("_commute_max_overage_minutes") or 9999.0),
+                    float(r.get("_commute_max_preferred_minutes") or 9999.0),
+                    -float(r.get("_group_score") or 0.0),
+                ),
+            )
+            cap_note = "No exact commute match found, so these are the closest nearby matches."
             note = f"{commute_note} {cap_note}" if commute_note else cap_note
     top = scored[:3]
     return {

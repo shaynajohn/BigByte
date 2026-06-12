@@ -1,4 +1,4 @@
-/* Post-questionnaire loading — maroon + cream with orbiting food cards */
+/* Post-questionnaire waiting — simple maroon + cream status screen */
 
 .q-wait-page {
   --q-wait-bg: #3c0000;
@@ -8,12 +8,14 @@
   min-height: 100svh;
   min-height: 100dvh;
   width: 100%;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(clamp(180px, 28vh, 330px), auto);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--q-wait-bg);
   color: var(--q-wait-cream);
   box-sizing: border-box;
   overflow-x: clip;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
 }
 
 .q-wait-page__content {
@@ -22,9 +24,9 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1.25rem, 5vw, 2.5rem) 0;
+  padding: 0;
   min-height: 0;
-  max-width: min(58rem, 96vw);
+  max-width: min(46rem, 100%);
   width: 100%;
   margin-inline: auto;
   box-sizing: border-box;
@@ -37,7 +39,10 @@
   text-align: center;
   gap: clamp(0.55rem, 1.6vw, 1rem);
   width: 100%;
-  padding: 0;
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  border: 2px solid rgba(245, 238, 220, 0.35);
+  border-radius: 24px;
+  background: rgba(245, 238, 220, 0.08);
   box-sizing: border-box;
 }
 
@@ -45,7 +50,7 @@
   margin: 0;
   font-family: 'Island Moments', cursive;
   font-weight: 400;
-  font-size: clamp(5.5rem, 18vw, 12rem);
+  font-size: clamp(5rem, 17vw, 9rem);
   line-height: 0.88;
   letter-spacing: 0.01em;
   color: var(--q-wait-cream);
@@ -71,6 +76,25 @@
   font-size: clamp(0.9rem, 2vw, 1rem);
   line-height: 1.45;
   color: rgba(245, 238, 220, 0.9);
+}
+
+.q-wait-page__steps {
+  display: grid;
+  gap: 0.5rem;
+  width: min(28rem, 100%);
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.q-wait-page__steps li {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(245, 238, 220, 0.22);
+  border-radius: 14px;
+  background: rgba(245, 238, 220, 0.07);
+  font-family: 'Libre Baskerville', Georgia, serif;
+  font-size: 0.86rem;
+  color: rgba(245, 238, 220, 0.86);
 }
 
 .q-wait-page__actions {
@@ -124,137 +148,10 @@
   font-size: 0.95rem;
 }
 
-.q-wait__stage {
-  position: relative;
-  width: 100%;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-inline: clamp(0.5rem, 3vw, 2rem);
-  padding-block: 0 max(0.75rem, env(safe-area-inset-bottom, 0px));
-  box-sizing: border-box;
-}
-
-.q-wait__stage-inner {
-  --orbit-r: clamp(92px, 21vw, 150px);
-  position: relative;
-  width: min(100%, 710px);
-  aspect-ratio: 710 / 310;
-  margin-inline: auto;
-  isolation: isolate;
-  transform: translateY(clamp(-4px, -1vh, 0px));
-}
-
-/* Slow circle: five arms on a ring, counter-rotated so photos stay upright */
-.q-wait__orbit {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 1;
-  width: 0;
-  height: 0;
-  animation: q-wait-orbit-spin 34s linear infinite;
-  will-change: transform;
-}
-
-@keyframes q-wait-orbit-spin {
-  from {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-  to {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
-}
-
-.q-wait__orbit-arm {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  transform: rotate(calc(var(--i) * 72deg)) translateY(calc(-1 * var(--orbit-r)));
-  transform-origin: center center;
-}
-
-.q-wait__orbit-upright {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  animation: q-wait-orbit-counter 34s linear infinite;
-  will-change: transform;
-}
-
-@keyframes q-wait-orbit-counter {
-  from {
-    transform: rotate(calc(var(--i) * -72deg));
-  }
-  to {
-    transform: rotate(calc(var(--i) * -72deg - 360deg));
-  }
-}
-
-.q-wait__slot {
-  overflow: hidden;
-  border-radius: 16px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
-  border: 2px solid rgba(245, 238, 220, 0.72);
-  background:
-    radial-gradient(circle at 28% 25%, rgba(245, 238, 220, 0.42), transparent 32%),
-    linear-gradient(135deg, rgba(245, 238, 220, 0.32), rgba(245, 238, 220, 0.1));
-}
-
-.q-wait__slot--orbit {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: clamp(74px, 15vw, 118px);
-  height: clamp(74px, 15vw, 118px);
-  transform: translate(-50%, -50%);
-  z-index: 2;
-}
-
-.q-wait__slot img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.q-wait__slot-label {
-  position: absolute;
-  left: 0.35rem;
-  right: 0.35rem;
-  bottom: 0.35rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.18rem 0.35rem;
-  border-radius: 999px;
-  background: rgba(60, 0, 0, 0.66);
-  font-family: 'Jacques Francois', serif;
-  font-size: clamp(0.68rem, 1.4vw, 0.82rem);
-  color: var(--q-wait-cream);
-  text-align: center;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .q-wait__orbit,
-  .q-wait__orbit-upright {
-    animation: none;
-  }
-}
-
 @media (max-width: 640px) {
-  .q-wait-page {
-    grid-template-rows: minmax(0, 1fr) minmax(150px, 27vh);
-  }
-
   .q-wait-page__content {
     justify-content: center;
-    padding: max(0.85rem, env(safe-area-inset-top, 0px)) 1rem 0.25rem;
+    padding: 0;
   }
 
   .q-wait-page__copy {
@@ -267,18 +164,5 @@
 
   .q-wait-page__headline {
     font-size: clamp(1.35rem, 7vw, 2rem);
-  }
-
-  .q-wait__stage {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
-  }
-
-  .q-wait__stage-inner {
-    --orbit-r: clamp(64px, 23vw, 88px);
-  }
-
-  .q-wait__slot--orbit {
-    width: clamp(56px, 18vw, 76px);
-    height: clamp(56px, 18vw, 76px);
   }
 }

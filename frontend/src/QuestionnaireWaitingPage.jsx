@@ -5,14 +5,6 @@ import './questionnaire-waiting.css'
 const API_BASE =
   import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
-const WAITING_ORBIT_SLOTS = [
-  { id: 'pizza', label: 'Pizza', src: '/food-spinner-pizza.svg' },
-  { id: 'thai', label: 'Thai', src: '/food-spinner-thai.svg' },
-  { id: 'sushi', label: 'Sushi', src: '/food-spinner-sushi.svg' },
-  { id: 'tacos', label: 'Tacos', src: '/food-spinner-tacos.svg' },
-  { id: 'boba', label: 'Boba', src: '/food-spinner-boba.svg' },
-]
-
 /**
  * Figma 43:518 — copy in `.q-wait-page__copy` matches the frame text only; chrome lives outside.
  * Polls group completion and continues automatically once every member has submitted answers.
@@ -113,22 +105,11 @@ export function QuestionnaireWaitingPage({
                 ? `${progress.completed} of ${progress.total} members have submitted preferences.`
                 : 'Waiting for group members to submit preferences.'}
           </p>
-        </div>
-      </div>
-      <div className="q-wait__stage" aria-hidden="true">
-        <div className="q-wait__stage-inner">
-          <div className="q-wait__orbit">
-            {WAITING_ORBIT_SLOTS.map((slot, i) => (
-              <div key={slot.id} className="q-wait__orbit-arm" style={{ '--i': i }}>
-                <div className="q-wait__orbit-upright">
-                  <div className="q-wait__slot q-wait__slot--orbit">
-                    <img src={slot.src} alt="" width="160" height="160" decoding="async" />
-                    <span className="q-wait__slot-label">{slot.label}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ul className="q-wait-page__steps" aria-label="What BigByte is preparing">
+            <li>Combining the group&apos;s cravings</li>
+            <li>Checking commute tradeoffs</li>
+            <li>Building a short list people can vote on</li>
+          </ul>
         </div>
       </div>
     </div>
