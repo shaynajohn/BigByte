@@ -16,7 +16,7 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
       - name: Run recommender tests
-        run: pytest backend/tests -q
+        run: pytest -q
 
   frontend:
     runs-on: ubuntu-latest
