@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useGroupEvents } from './groupEvents.js'
 import './recommendations.css'
 
 const API_BASE =
@@ -155,11 +156,35 @@ export function RecommendationsPage({
   const [rows, setRows] = useState([])
   const [message, setMessage] = useState('')
   const [votesData, setVotesData] = useState({ votes: {}, counts: {}, member_count: 0 })
+  const [groupProgress, setGroupProgress] = useState({
+    ready: false,
+    completed: 0,
+    total: 0,
+  })
 
   const lat = latitude
   const lng = longitude
 
-  const load = useCallback(async () => {
+  const applyLivePayload = useCallback((payload) => {
+    if (!payload?.exists) return
+    setGroupProgress({
+      ready: Boolean(payload.ready_for_recommendations),
+      completed: Number(payload.completed_count || 0),
+      total: Number(payload.member_count || 0),
+    })
+    if (payload.counts || payload.votes || payload.winner) {
+      setVotesData({
+        votes: payload.votes || {},
+        counts: payload.counts || {},
+        member_count: payload.member_count || 0,
+        winner: payload.winner,
+      })
+    }
+  }, [])
+
+  useGroupEvents(groupId, applyLivePayload)
+
+  const loadRecommendations = useCallback(async () => {
     setLoading(true)
     setRows([])
     setMessage('')
@@ -216,13 +241,51 @@ export function RecommendationsPage({
     }
   }, [groupId, memberActorIds, groupFeaturePreferences, lat, lng])
 
+  const checkGroupReady = useCallback(async () => {
+    if (!groupId) {
+      setGroupProgress({ ready: true, completed: 0, total: 0 })
+      return true
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Group not found.')
+      applyLivePayload({ exists: true, ...data })
+      return Boolean(data.ready_for_recommendations)
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not load group status.')
+      return false
+    }
+  }, [groupId, applyLivePayload])
+
   useEffect(() => {
     if (!groupExists) {
       setLoading(false)
-      return
+      return undefined
     }
-    load()
-  }, [groupExists, load])
+
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const ready = await checkGroupReady()
+      if (cancelled) return
+      if (ready) {
+        await loadRecommendations()
+      } else {
+        setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [groupExists, checkGroupReady, loadRecommendations])
+
+  useEffect(() => {
+    if (!groupProgress.ready || !groupExists) return
+    if (rows.length) return
+    loadRecommendations()
+  }, [groupProgress.ready, groupExists, rows.length, loadRecommendations])
 
   const picks = useMemo(() => rows, [rows])
   const leadingPick = useMemo(() => {
@@ -315,13 +378,30 @@ export function RecommendationsPage({
     )
   }
 
-  if (loading && !picks.length) {
+  if (loading && !picks.length && groupProgress.ready) {
     return (
       <div className="rec-loading-page" aria-live="polite" aria-busy="true">
         <div className="rec-loading-card">
           <p className="rec-loading-card__brand">BigByte</p>
           <h1 className="rec-loading-card__title">Finalizing your top picks.</h1>
           <p className="rec-loading-card__copy">Scoring the group, commute, and SF neighborhood matches...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!groupProgress.ready && groupId) {
+    return (
+      <div className="rec-loading-page" aria-live="polite" aria-busy="true">
+        <div className="rec-loading-card">
+          <p className="rec-loading-card__brand">BigByte</p>
+          <h1 className="rec-loading-card__title">Waiting for the group.</h1>
+          <p className="rec-loading-card__copy">
+            {groupProgress.total
+              ? `${groupProgress.completed} of ${groupProgress.total} members have submitted preferences.`
+              : 'Waiting for group members to finish the questionnaire.'}
+          </p>
+          <p className="rec-loading-card__hint">Updates appear here automatically — no refresh needed.</p>
         </div>
       </div>
     )

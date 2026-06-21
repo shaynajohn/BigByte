@@ -1,17 +1,61 @@
 # BigByte
 
-BigByte is a San Francisco group food recommender.
+BigByte is a **session-based group food recommender** for San Francisco. Create a code, friends join from their phones, everyone answers a short questionnaire, and the app returns three ranked picks to vote on — no accounts, no saved history.
 
-This version is intentionally independent from the original class-project Supabase setup. It uses:
+Built for **spontaneous in-the-moment decisions** (standing outside, deciding where to eat tonight), not long-term restaurant discovery.
 
-- React + Vite frontend
-- FastAPI backend
-- A curated San Francisco demo food catalog
-- In-memory group/session state only
+## Stack
 
-Nothing is permanently saved. If the backend restarts, temporary groups and answers are cleared.
+| Layer | Tech |
+|-------|------|
+| Frontend | React + Vite, hash routing, PWA |
+| Backend | FastAPI, in-memory session groups |
+| Recommender | Feature-importance scoring + fairness objective |
+| Routing | OpenRouteService (walking/driving matrix) |
+| Deploy | Docker on Render (single URL serves API + UI) |
 
-## Run Locally
+## How it works
+
+```text
+Create group → share join code → each member: questionnaire (~2 min)
+      → recommender scores SF catalog → top 3 → live vote → final pick
+```
+
+### Product choices (intentional)
+
+| Choice | Why |
+|--------|-----|
+| **In-memory sessions** | Zero signup, privacy-friendly, built for "right now" |
+| **Short questionnaire** | High-signal questions only (commute, cuisine, budget, plan, vibe) |
+| **Top 3 + vote** | Avoids analysis paralysis; group converges fast |
+| **Commute cap + fallback** | Respects max walk/drive time; fills with closest matches when strict pool is small |
+
+### Recommender (the interesting part)
+
+Each member submits features with **importance sliders** and optional **dealbreaker strength**. For every restaurant, BigByte computes per-member utility in `[0, 1]`, then ranks by a **fairness-aware group score**:
+
+```text
+G = α · avg(member utilities) + (1 − α) · min(member utilities)
+```
+
+- **Cuisine matching** uses curated synonym maps (e.g. "Indian" → Curry, Dosa, South Indian).
+- **Commute** uses OpenRouteService route times when configured; candidates are pre-filtered geographically to limit API calls.
+- **Dealbreakers** (strength ≥ 4) filter strictly; softer preferences affect rank only.
+
+See `backend/recommender_rules.py` and `backend/tests/test_recommender_rules.py`.
+
+### Real-time group sync
+
+Groups expose a **Server-Sent Events** stream at `/api/groups/{id}/stream`. Clients receive live updates when:
+
+- Members join
+- Questionnaire answers are submitted (progress: "2 of 4 ready")
+- Votes change
+- A final winner is locked
+
+No polling on the results page — phones update together.
+
+## Run locally
 
 Backend:
 
@@ -21,7 +65,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 cd ..
-export OPENROUTESERVICE_API_KEY="your_openrouteservice_key"  # optional locally; enables live walking/driving route times
+export OPENROUTESERVICE_API_KEY="your_openrouteservice_key"  # optional; live walk/drive times
 python3 -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -33,45 +77,47 @@ npm install
 npm run dev
 ```
 
-Open:
+Open `http://localhost:5173`
 
-```text
-http://localhost:5173
+### Tests
+
+```bash
+pip install -r backend/requirements.txt
+pytest backend/tests -q
 ```
+
+CI runs backend tests + frontend lint/build on push (`.github/workflows/ci.yml`).
 
 ## Deploy
 
-This repo is configured to deploy as one Docker web service. The FastAPI backend serves
-the built React app from `frontend/dist`, so the deployed app has one public URL that
-works on desktop and mobile browsers.
+Single Docker service: FastAPI serves the built React app from `frontend/dist`.
 
-Render:
+**Render:**
 
-1. Push this repo to GitHub.
-2. In Render, choose **New** → **Blueprint** and select this repository.
-3. Add `OPENROUTESERVICE_API_KEY` as a Render environment variable to enable live walking/driving route times.
-4. Render will read `render.yaml`, build the Docker image, and run:
+1. Push to GitHub.
+2. **New → Blueprint** → select this repo.
+3. Add `OPENROUTESERVICE_API_KEY` in Render env vars.
+4. Render reads `render.yaml` and deploys.
 
-```bash
-uvicorn backend.main:app --host 0.0.0.0 --port $PORT
-```
+On mobile: open the Render URL → **Add to Home Screen** for an app-like experience.
 
-After deploy, open the Render URL on your phone. Use **Share** → **Add to Home Screen**
-on iPhone, or **Install app** / **Add to Home screen** on Android.
+**Note:** Groups live in server memory. Restart/redeploy clears active sessions — by design for ephemeral use.
 
-Note: groups are currently stored in backend memory. Restarting or redeploying the server
-clears active groups.
+## Demo video
 
-## Data Behavior
+See [DEMO.md](./DEMO.md) for a 60-second recording script (create group → share → join → vote → winner).
 
-- No Supabase required.
-- No SQLite database required.
-- Group data is held in backend memory.
-- Group membership and submitted answers are held in backend memory while the server is running.
+## Main files
 
-## Main Files
+| File | Purpose |
+|------|---------|
+| `backend/main.py` | API, group sessions, SSE stream, commute routing |
+| `backend/recommender_rules.py` | Scoring, dealbreakers, fairness |
+| `backend/demo_catalog.py` | Curated SF food catalog |
+| `frontend/src/LandingPage.jsx` | Create/join entry |
+| `frontend/src/RecommendationsPage.jsx` | Results, live voting, winner |
+| `frontend/src/groupEvents.js` | SSE client hook |
 
-- `backend/main.py`: FastAPI API and temporary group endpoints
-- `backend/demo_catalog.py`: San Francisco food catalog
-- `backend/recommender_rules.py`: ranking/scoring logic
-- `frontend/src/`: React app UI
+## Resume one-liner
+
+> Built BigByte, an ephemeral group decision app that fuses multi-user food preferences with commute-aware routing, real-time SSE voting, and a fairness-weighted recommender — deployed as a mobile PWA on Render.

@@ -9,13 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+import asyncio
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .demo_catalog import DEMO_SAN_FRANCISCO_FOOD_SPOTS
+from .group_events import notify_group_event, subscribe, unsubscribe
 from .recommender_rules import (
     contains_any_category,
     extract_price_level,
@@ -46,6 +49,65 @@ app.add_middleware(
 )
 
 GROUPS: dict[str, dict[str, Any]] = {}
+
+
+def _group_progress(group: dict[str, Any]) -> dict[str, Any]:
+    done = set((group.get("answers") or {}).keys())
+    member_actor_ids = [
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    ]
+    pending = sorted(set(member_actor_ids) - done)
+    return {
+        "completed_actor_ids": sorted(done),
+        "completed_count": len(done),
+        "member_count": len(member_actor_ids),
+        "pending_actor_ids": pending,
+        "ready_for_recommendations": bool(member_actor_ids) and not pending,
+    }
+
+
+def _build_vote_payload(group: dict[str, Any]) -> dict[str, Any]:
+    votes = group.get("votes") or {}
+    counts: dict[str, dict[str, int]] = {}
+    for actor_votes in votes.values():
+        if not isinstance(actor_votes, dict):
+            continue
+        for restaurant_id, vote in actor_votes.items():
+            if vote not in {"love", "maybe", "pass"}:
+                continue
+            row = counts.setdefault(
+                str(restaurant_id),
+                {"love": 0, "maybe": 0, "pass": 0, "total": 0},
+            )
+            row[str(vote)] += 1
+            row["total"] += 1
+    return {
+        "votes": votes,
+        "counts": counts,
+        "member_count": len(group.get("members", []) or []),
+        "winner": group.get("winner"),
+    }
+
+
+def _group_live_payload(group_id: str) -> dict[str, Any]:
+    group = GROUPS.get(group_id)
+    if not group:
+        return {"group_id": group_id, "exists": False}
+    progress = _group_progress(group)
+    votes = _build_vote_payload(group)
+    return {
+        "group_id": group_id,
+        "exists": True,
+        "members": group.get("members") or [],
+        **progress,
+        **votes,
+    }
+
+
+def _notify_group(group_id: str, event_type: str) -> None:
+    notify_group_event(group_id, event_type, _group_live_payload(group_id))
 
 
 def now_iso() -> str:
@@ -553,21 +615,42 @@ def get_group(group_id: str) -> dict[str, Any]:
     group = GROUPS.get(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
-    done = set((group.get("answers") or {}).keys())
-    member_actor_ids = [
-        str(m.get("actor_id"))
-        for m in group.get("members", [])
-        if m.get("actor_id")
-    ]
-    pending = sorted(set(member_actor_ids) - done)
     return {
         **group,
-        "completed_actor_ids": sorted(done),
-        "completed_count": len(done),
-        "member_count": len(member_actor_ids),
-        "pending_actor_ids": pending,
-        "ready_for_recommendations": bool(member_actor_ids) and not pending,
+        **_group_progress(group),
     }
+
+
+@app.get("/api/groups/{group_id}/stream")
+async def stream_group_events(group_id: str) -> StreamingResponse:
+    group = GROUPS.get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+
+    queue = subscribe(group_id)
+
+    async def event_generator():
+        snapshot = json.dumps(_group_live_payload(group_id))
+        yield f"event: snapshot\ndata: {snapshot}\n\n"
+        try:
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    yield f"event: update\ndata: {message}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            unsubscribe(group_id, queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/groups/{group_id}/members")
@@ -587,6 +670,7 @@ def join_group(group_id: str, payload: JoinGroupRequest) -> dict[str, Any]:
         "joined_at": now_iso(),
     }
     group["members"].append(member)
+    _notify_group(group_id, "member_joined")
     return {"group": group, "member": member}
 
 
@@ -614,11 +698,13 @@ def save_group_answers(group_id: str, payload: SaveAnswersRequest) -> dict[str, 
         "updated_at": now_iso(),
     }
     completed_count = len(group.get("answers") or {})
+    progress = _group_progress(group)
+    _notify_group(group_id, "answers_updated")
     return {
         "ok": True,
         "completed_count": completed_count,
-        "member_count": len(member_actor_ids),
-        "ready_for_recommendations": bool(member_actor_ids) and completed_count >= len(member_actor_ids),
+        "member_count": progress["member_count"],
+        "ready_for_recommendations": progress["ready_for_recommendations"],
     }
 
 
@@ -627,26 +713,7 @@ def get_group_votes(group_id: str) -> dict[str, Any]:
     group = GROUPS.get(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
-    votes = group.get("votes") or {}
-    counts: dict[str, dict[str, int]] = {}
-    for actor_votes in votes.values():
-        if not isinstance(actor_votes, dict):
-            continue
-        for restaurant_id, vote in actor_votes.items():
-            if vote not in {"love", "maybe", "pass"}:
-                continue
-            row = counts.setdefault(
-                str(restaurant_id),
-                {"love": 0, "maybe": 0, "pass": 0, "total": 0},
-            )
-            row[str(vote)] += 1
-            row["total"] += 1
-    return {
-        "votes": votes,
-        "counts": counts,
-        "member_count": len(group.get("members", []) or []),
-        "winner": group.get("winner"),
-    }
+    return _build_vote_payload(group)
 
 
 @app.post("/api/groups/{group_id}/votes")
@@ -664,6 +731,7 @@ def save_group_vote(group_id: str, payload: SaveVoteRequest) -> dict[str, Any]:
     group.setdefault("votes", {}).setdefault(payload.actor_id, {})[
         payload.restaurant_id
     ] = payload.vote
+    _notify_group(group_id, "votes_updated")
     return get_group_votes(group_id)
 
 
@@ -684,6 +752,7 @@ def set_group_winner(group_id: str, payload: SetWinnerRequest) -> dict[str, Any]
         "selected_by_actor_id": payload.actor_id,
         "selected_at": now_iso(),
     }
+    _notify_group(group_id, "winner_updated")
     return get_group_votes(group_id)
 
 
