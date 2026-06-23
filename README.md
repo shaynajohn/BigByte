@@ -44,6 +44,28 @@ G = α · avg(member utilities) + (1 − α) · min(member utilities)
 
 See `backend/recommender_rules.py` and `backend/tests/test_recommender_rules.py`.
 
+### Evaluation (synthetic group profiles)
+
+BigByte includes an offline eval harness that runs **11 synthetic San Francisco group profiles** through the full recommendation pipeline (no live API key required — commute uses estimated routes).
+
+```bash
+python -m backend.eval.run_eval
+```
+
+**Latest baseline** (catalog + scoring as of this repo):
+
+| Metric | Result |
+|--------|--------|
+| Full top-3 rate | 100% (11/11 profiles return 3 picks) |
+| Cuisine hit rate | 100% (top-3 slots match requested cuisine when specified) |
+| Commute cap rate | 92% (top-3 slots within all members' max walk/drive time) |
+| Dealbreaker-clean rate | 100% (no relaxed-dealbreaker fallback in top-3) |
+| Mean top-1 min utility | 0.92 |
+
+Profiles cover Indian/Mexican/Japanese matching, mixed-cuisine groups, budget clash fairness, dine-in dealbreakers, delivery-only, and wide-area driving commutes. See `backend/eval/profiles.py`.
+
+CI runs this eval on every push and fails if metrics drop below configured thresholds.
+
 ### Real-time group sync
 
 Groups expose a **Server-Sent Events** stream at `/api/groups/{id}/stream`. Clients receive live updates when:
@@ -83,10 +105,11 @@ Open `http://localhost:5173`
 
 ```bash
 pip install -r backend/requirements.txt
-pytest backend/tests -q
+pytest -q
+python -m backend.eval.run_eval
 ```
 
-CI runs backend tests + frontend lint/build on push (`.github/workflows/ci.yml`).
+CI runs backend tests, the eval harness, and frontend lint/build on push (`.github/workflows/ci.yml`).
 
 ## Deploy
 
@@ -113,6 +136,7 @@ See [DEMO.md](./DEMO.md) for a 60-second recording script (create group → shar
 |------|---------|
 | `backend/main.py` | API, group sessions, SSE stream, commute routing |
 | `backend/recommender_rules.py` | Scoring, dealbreakers, fairness |
+| `backend/eval/run_eval.py` | Synthetic profile evaluation harness |
 | `backend/demo_catalog.py` | Curated SF food catalog |
 | `frontend/src/LandingPage.jsx` | Create/join entry |
 | `frontend/src/RecommendationsPage.jsx` | Results, live voting, winner |
@@ -120,4 +144,4 @@ See [DEMO.md](./DEMO.md) for a 60-second recording script (create group → shar
 
 ## Resume one-liner
 
-> Built BigByte, an ephemeral group decision app that fuses multi-user food preferences with commute-aware routing, real-time SSE voting, and a fairness-weighted recommender — deployed as a mobile PWA on Render.
+> Built BigByte, an ephemeral group decision app that fuses multi-user food preferences with commute-aware routing, real-time SSE voting, and a validated fairness-weighted recommender — deployed as a mobile PWA on Render.

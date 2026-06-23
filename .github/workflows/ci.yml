@@ -17,6 +17,8 @@ jobs:
         run: pip install -r backend/requirements.txt
       - name: Run recommender tests
         run: pytest -q
+      - name: Run recommender evaluation
+        run: python -m backend.eval.run_eval
 
   frontend:
     runs-on: ubuntu-latest
