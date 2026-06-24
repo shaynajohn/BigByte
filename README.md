@@ -128,7 +128,7 @@ On mobile: open the Render URL → **Add to Home Screen** for an app-like experi
 
 ## Demo video
 
-See [DEMO.md](./DEMO.md) for a 60-second recording script (create group → share → join → vote → winner).
+https://canva.link/3lx95wur0pj4dos
 
 ## Main files
 
