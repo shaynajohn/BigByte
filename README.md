@@ -128,9 +128,9 @@ On mobile: open the Render URL → **Add to Home Screen** for an app-like experi
 
 ## Demo video
 
-Automated: see [DEMO.md](./DEMO.md) — `cd e2e && npm run record-demo` → `demo/bigbyte-demo.webm`.
+https://canva.link/3lx95wur0pj4dos
 
-Manual: same doc has a 60-second shot list for phone/screen recording.
+To regenerate locally, see [DEMO.md](./DEMO.md) — `cd e2e && npm run record-demo` → `demo/bigbyte-demo.webm`. The same doc has a manual 60-second shot list for phone/screen recording.
 
 ## Main files
 
