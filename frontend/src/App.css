@@ -467,3 +467,69 @@
   flex-direction: column;
   gap: 1rem;
 }
+
+.group-meetup {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--sage-200);
+  text-align: left;
+}
+
+.group-meetup__eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sage-700);
+}
+
+.group-meetup__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.group-meetup__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--sage-700);
+}
+
+.group-meetup__presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+@media (min-width: 540px) {
+  .group-meetup__presets {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.group-meetup__pill {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+}
+
+.group-meetup__pill--active {
+  border-color: var(--sage-700);
+  background: var(--sage-100);
+}
+
+.group-meetup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

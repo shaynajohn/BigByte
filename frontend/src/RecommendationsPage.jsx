@@ -98,10 +98,19 @@ function buildCommuteChips(r) {
 
   if (modes.length === 1) {
     const label = commuteModeLabel(modes[0])
+    const originLabels = Array.from(
+      new Set(memberCommutes.map((row) => row?.origin_label).filter(Boolean)),
+    )
+    const originHint =
+      originLabels.length === 1
+        ? `from ${originLabels[0]}`
+        : originLabels.length > 1
+          ? 'mixed start points'
+          : null
     const pieces =
       memberCount > 1
-        ? [label, avgMinutes ? `avg ${avgMinutes}` : null, maxMinutes ? `max ${maxMinutes}` : null, maxMiles]
-        : [label, maxMinutes || avgMinutes, maxMiles]
+        ? [label, originHint, avgMinutes ? `avg ${avgMinutes}` : null, maxMinutes ? `max ${maxMinutes}` : null, maxMiles]
+        : [label, originHint, maxMinutes || avgMinutes, maxMiles]
     chips.push([modes[0], pieces.filter(Boolean).join(' · ')])
   } else if (avgMinutes || maxMinutes || maxMiles) {
     chips.push([

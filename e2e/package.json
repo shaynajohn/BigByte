@@ -1,0 +1,12 @@
+{
+  "name": "bigbyte-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "record-demo": "PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers node record-demo.mjs",
+    "install-browser": "PLAYWRIGHT_BROWSERS_PATH=./.playwright-browsers playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.51.0"
+  }
+}

@@ -4,6 +4,7 @@ import { JoinGroupPage } from './JoinGroupPage.jsx'
 import { LandingPage } from './LandingPage.jsx'
 import { QuestionnaireStep2Page } from './QuestionnaireStep2Page.jsx'
 import { QuestionnairePricePage } from './QuestionnairePricePage.jsx'
+import { GroupMeetupPanel } from './GroupMeetupPanel.jsx'
 import { QuestionnaireCommutePage } from './QuestionnaireCommutePage.jsx'
 import { QuestionnairePlanPage } from './QuestionnairePlanPage.jsx'
 import { QuestionnaireAmbiancePage } from './QuestionnaireAmbiancePage.jsx'
@@ -539,6 +540,11 @@ function App() {
     [currentGroup, actorId],
   )
 
+  const isGroupHost = useMemo(() => {
+    const hostId = currentGroup?.host_actor_id || currentGroup?.members?.[0]?.actor_id
+    return Boolean(hostId && hostId === actorId)
+  }, [currentGroup, actorId])
+
   const groupFeaturePreferences = groupIdFromRoute
     ? getGroupFeaturePreferences(groupIdFromRoute, actorId)
     : null
@@ -828,6 +834,9 @@ function App() {
               groupId={groupIdFromRoute}
               groupExists={!!currentGroup}
               actorId={actorId}
+              isHost={isGroupHost}
+              groupMeetup={currentGroup?.meetup || null}
+              onMeetupUpdated={() => fetchGroupById(groupIdFromRoute).catch(() => {})}
               onBack={() => {
                 setError('')
                 navigate('/')
@@ -1042,20 +1051,17 @@ function App() {
                     <li className="kahoot-card-empty">(none yet)</li>
                   )}
                 </ul>
-                <p className="kahoot-hint" style={{ marginTop: 16 }}>
-                  Share the invite code or link, then have each person complete the flow.
-                  Commute is based on each member&apos;s location and preferred mode.
-                </p>
-                <MeetingPointControls
-                  idPrefix="grp"
-                  title="Optional fallback meeting point"
-                  hint="Used only for the older straight-line distance fallback. The results page uses each member's commute answers."
-                  latitude={groupLatInput}
-                  longitude={groupLngInput}
-                  onLatitudeChange={setGroupLatInput}
-                  onLongitudeChange={setGroupLngInput}
-                  onUseCurrentLocation={() => applyCurrentLocation('group')}
+                <GroupMeetupPanel
+                  key={currentGroup?.meetup?.set_at || 'no-meetup'}
+                  groupId={groupIdFromRoute}
+                  actorId={actorId}
+                  meetup={currentGroup?.meetup || null}
+                  onUpdated={() => fetchGroupById(groupIdFromRoute).catch(() => {})}
                 />
+                <p className="kahoot-hint" style={{ marginTop: 16 }}>
+                  Share the invite code, set a meetup spot if you have one, then have each person complete
+                  the questionnaire. Everyone can measure from the meetup or from where they are.
+                </p>
                 <div className="kahoot-actions" style={{ marginTop: 12 }}>
                   <button
                     type="button"

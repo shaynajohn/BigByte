@@ -9,6 +9,12 @@ __pycache__/
 # Node / React
 frontend/node_modules/
 frontend/dist/
+e2e/node_modules/
+e2e/.playwright-browsers/
+
+# Playwright demo output (remove this line to commit the video)
+demo/*.webm
+demo/*.mp4
 
 # OS / editor
 .DS_Store

@@ -310,13 +310,20 @@ export function getGroupFeaturePreferences(groupId, actorId) {
 
   const commuteLat = finiteCoordinate(row.commute_origin_latitude, -90, 90)
   const commuteLng = finiteCoordinate(row.commute_origin_longitude, -180, 180)
-  if (commuteLat != null && commuteLng != null) {
+  const commuteOriginType =
+    row.commute_origin_type === 'meetup' ? 'meetup' : 'self'
+  if (commuteOriginType === 'meetup' || (commuteLat != null && commuteLng != null)) {
     features.commute = {
       value: {
-        origin: {
-          latitude: commuteLat,
-          longitude: commuteLng,
-        },
+        origin_type: commuteOriginType,
+        origin:
+          commuteLat != null && commuteLng != null
+            ? {
+                latitude: commuteLat,
+                longitude: commuteLng,
+                label: row.commute_origin_label || 'Your location',
+              }
+            : null,
         mode: commuteMode(row.commute_mode),
         max_minutes: commuteMinutes(row.commute_max_minutes),
       },
@@ -406,10 +413,17 @@ export function loadCommuteDraft(groupId, actorId) {
     const row = getActorQuestionnaire(groupId, actorId)
     if (!row || typeof row !== 'object') return null
     return {
+      commute_origin_type:
+        row.commute_origin_type === 'meetup' ? 'meetup' : 'self',
       commute_origin_latitude: finiteCoordinate(row.commute_origin_latitude, -90, 90),
       commute_origin_longitude: finiteCoordinate(row.commute_origin_longitude, -180, 180),
+      commute_origin_label:
+        typeof row.commute_origin_label === 'string' ? row.commute_origin_label : '',
+      commute_origin_preset:
+        typeof row.commute_origin_preset === 'string' ? row.commute_origin_preset : '',
       commute_mode: commuteMode(row.commute_mode),
       commute_max_minutes: commuteMinutes(row.commute_max_minutes),
+      commute_set_group_meetup: Boolean(row.commute_set_group_meetup),
     }
   } catch {
     return null
@@ -419,10 +433,17 @@ export function loadCommuteDraft(groupId, actorId) {
 export function saveCommuteDraft(groupId, draft, actorId) {
   try {
     patchActorQuestionnaire(groupId, actorId, {
+      commute_origin_type:
+        draft?.commute_origin_type === 'meetup' ? 'meetup' : 'self',
       commute_origin_latitude: finiteCoordinate(draft?.commute_origin_latitude, -90, 90),
       commute_origin_longitude: finiteCoordinate(draft?.commute_origin_longitude, -180, 180),
+      commute_origin_label:
+        typeof draft?.commute_origin_label === 'string' ? draft.commute_origin_label : '',
+      commute_origin_preset:
+        typeof draft?.commute_origin_preset === 'string' ? draft.commute_origin_preset : '',
       commute_mode: commuteMode(draft?.commute_mode),
       commute_max_minutes: commuteMinutes(draft?.commute_max_minutes),
+      commute_set_group_meetup: Boolean(draft?.commute_set_group_meetup),
     })
   } catch {
     /* ignore */

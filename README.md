@@ -128,7 +128,9 @@ On mobile: open the Render URL → **Add to Home Screen** for an app-like experi
 
 ## Demo video
 
-See [DEMO.md](./DEMO.md) for a 60-second recording script (create group → share → join → vote → winner).
+Automated: see [DEMO.md](./DEMO.md) — `cd e2e && npm run record-demo` → `demo/bigbyte-demo.webm`.
+
+Manual: same doc has a 60-second shot list for phone/screen recording.
 
 ## Main files
 

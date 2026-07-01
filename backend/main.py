@@ -101,6 +101,7 @@ def _group_live_payload(group_id: str) -> dict[str, Any]:
         "group_id": group_id,
         "exists": True,
         "members": group.get("members") or [],
+        "meetup": group.get("meetup"),
         **progress,
         **votes,
     }
@@ -224,7 +225,37 @@ def _round_metric(value: float | None, places: int = 1) -> float | None:
     return round(float(value), places)
 
 
-def _commute_specs(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _resolve_commute_origin(
+    value: dict[str, Any],
+    group_meetup: dict[str, Any] | None,
+) -> tuple[float, float, str, str] | None:
+    origin_type = str(value.get("origin_type") or "self").lower()
+    if origin_type == "meetup":
+        if not isinstance(group_meetup, dict):
+            return None
+        lat = _safe_float(group_meetup.get("latitude"))
+        lng = _safe_float(group_meetup.get("longitude"))
+        if lat is None or lng is None:
+            return None
+        label = str(group_meetup.get("label") or "Group meetup").strip() or "Group meetup"
+    else:
+        origin = value.get("origin") or {}
+        if not isinstance(origin, dict):
+            return None
+        lat = _safe_float(origin.get("latitude"))
+        lng = _safe_float(origin.get("longitude"))
+        if lat is None or lng is None:
+            return None
+        label = str(origin.get("label") or "Your location").strip() or "Your location"
+    if not _is_supported_commute_origin(lat, lng):
+        return None
+    return lat, lng, label, origin_type
+
+
+def _commute_specs(
+    members: list[dict[str, Any]],
+    group_meetup: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     specs: list[dict[str, Any]] = []
     for member in members:
         feats = (member.get("features") or {}) if isinstance(member, dict) else {}
@@ -232,15 +263,10 @@ def _commute_specs(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
         value = commute_feature.get("value") if isinstance(commute_feature, dict) else None
         if not isinstance(value, dict):
             continue
-        origin = value.get("origin") or {}
-        if not isinstance(origin, dict):
+        resolved = _resolve_commute_origin(value, group_meetup)
+        if not resolved:
             continue
-        lat = _safe_float(origin.get("latitude"))
-        lng = _safe_float(origin.get("longitude"))
-        if lat is None or lng is None:
-            continue
-        if not _is_supported_commute_origin(lat, lng):
-            continue
+        lat, lng, origin_label, origin_type = resolved
         mode = str(value.get("mode") or "driving").lower()
         if mode not in {"walking", "driving"}:
             mode = "driving"
@@ -251,6 +277,8 @@ def _commute_specs(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "longitude": lng,
                 "mode": mode,
                 "max_minutes": _safe_positive_int(value.get("max_minutes")),
+                "origin_label": origin_label,
+                "origin_type": origin_type,
             }
         )
     return specs
@@ -368,8 +396,9 @@ def _fetch_openrouteservice_matrix(
 def attach_commute_metrics(
     candidates: list[dict[str, Any]],
     members: list[dict[str, Any]],
+    group_meetup: dict[str, Any] | None = None,
 ) -> str | None:
-    specs = _commute_specs(members)
+    specs = _commute_specs(members, group_meetup)
     if not specs:
         if _commute_preference_count(members):
             return "Commute location was outside the Bay Area, so distance was ignored for these recommendations."
@@ -441,6 +470,8 @@ def attach_commute_metrics(
                     "actor_id": spec["actor_id"],
                     "mode": spec["mode"],
                     "max_minutes": spec["max_minutes"],
+                    "origin_label": spec.get("origin_label"),
+                    "origin_type": spec.get("origin_type"),
                     "walking": preferred if preferred_mode == "walking" else None,
                     "driving": preferred if preferred_mode == "driving" else None,
                     "preferred_distance_miles": preferred_distance,
@@ -569,6 +600,13 @@ class SetWinnerRequest(BaseModel):
     restaurant_id: str = Field(min_length=1, max_length=200)
 
 
+class SetGroupMeetupRequest(BaseModel):
+    actor_id: str = Field(min_length=1, max_length=200)
+    latitude: float
+    longitude: float
+    label: str = Field(default="Meetup spot", min_length=1, max_length=80)
+
+
 class SessionRecommendRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
@@ -606,8 +644,37 @@ def create_group(payload: CreateGroupRequest) -> dict[str, Any]:
         "answers": {},
         "votes": {},
         "winner": None,
+        "meetup": None,
+        "host_actor_id": actor_id,
     }
     return GROUPS[group_id]
+
+
+@app.put("/api/groups/{group_id}/meetup")
+def set_group_meetup(group_id: str, payload: SetGroupMeetupRequest) -> dict[str, Any]:
+    group = GROUPS.get(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found or server was restarted.")
+    member_actor_ids = {
+        str(m.get("actor_id"))
+        for m in group.get("members", [])
+        if m.get("actor_id")
+    }
+    if member_actor_ids and payload.actor_id not in member_actor_ids:
+        raise HTTPException(status_code=400, detail="Actor is not a member of this group.")
+    lat = _safe_float(payload.latitude)
+    lng = _safe_float(payload.longitude)
+    if lat is None or lng is None or not _is_supported_commute_origin(lat, lng):
+        raise HTTPException(status_code=400, detail="Meetup must be a valid Bay Area location.")
+    group["meetup"] = {
+        "latitude": lat,
+        "longitude": lng,
+        "label": payload.label.strip() or "Meetup spot",
+        "set_by_actor_id": payload.actor_id,
+        "set_at": now_iso(),
+    }
+    _notify_group(group_id, "meetup_updated")
+    return {"ok": True, "meetup": group["meetup"]}
 
 
 @app.get("/api/groups/{group_id}")
@@ -786,11 +853,15 @@ def recommend_for_session_group(group_id: str, payload: SessionRecommendRequest)
             longitude=payload.longitude,
             limit=payload.limit,
             fairness_alpha=payload.fairness_alpha,
-        )
+        ),
+        group_meetup=group.get("meetup"),
     )
 
 
-def run_feature_recommendations(payload: GroupFeatureRecommendRequest) -> dict[str, Any]:
+def run_feature_recommendations(
+    payload: GroupFeatureRecommendRequest,
+    group_meetup: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     members = [
         {
             "actor_id": m.actor_id,
@@ -806,7 +877,7 @@ def run_feature_recommendations(payload: GroupFeatureRecommendRequest) -> dict[s
         for m in payload.members
     ]
     candidates = [with_distance(r, payload.latitude, payload.longitude) for r in demo_candidates(payload.limit)]
-    commute_note = attach_commute_metrics(candidates, members)
+    commute_note = attach_commute_metrics(candidates, members, group_meetup)
     scored = score_group_by_feature_importance(
         restaurants=candidates,
         members=members,
